@@ -1,0 +1,3 @@
+[submodule "Dependencies/NOMoneCC"]
+	path = Dependencies/NOMoneCC
+	url = git@github.com:raslanove/NOMoneCC.git
