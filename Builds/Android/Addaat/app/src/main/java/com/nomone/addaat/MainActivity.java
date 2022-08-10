@@ -1,4 +1,4 @@
-package com.nomone.bites;
+package com.nomone.addaat;
 
 import android.app.Activity;
 import android.os.Bundle;

@@ -22,7 +22,7 @@ SOURCES = \
 	
 OBJECTS = $(SOURCES:.c=.o)
 
-TARGET = Bites.o
+TARGET = Addaat.o
 
 # Targets start here.
 all: $(TARGET)

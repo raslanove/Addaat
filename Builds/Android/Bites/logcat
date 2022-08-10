@@ -1,2 +1,0 @@
-javac Logcat/Logcat.java
-java -cp Logcat Logcat com.nomone.bites
