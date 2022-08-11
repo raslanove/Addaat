@@ -95,11 +95,10 @@ void defineLanguage(struct NCC* ncc) {
     NCC_addRule(pushingRuleData.set(&pushingRuleData,              "?",              "?"));
     NCC_addRule(pushingRuleData.set(&pushingRuleData,              ",",              ","));
     NCC_addRule(pushingRuleData.set(&pushingRuleData,              ".",              "."));
-    NCC_addRule(pushingRuleData.set(&pushingRuleData,             "->",           "\\->"));
     NCC_addRule(pushingRuleData.set(&pushingRuleData,             "++",             "++"));
     NCC_addRule(pushingRuleData.set(&pushingRuleData,             "--",         "\\-\\-"));
     NCC_addRule(pushingRuleData.set(&pushingRuleData,            "...",            "..."));
-    NCC_addRule(pushingRuleData.set(&pushingRuleData,       "pointer*",            "\\*"));
+    // TODO: turn into class...
     NCC_addRule(pushingRuleData.set(&pushingRuleData,         "struct",         "struct"));
     NCC_addRule(pushingRuleData.set(&pushingRuleData,           "enum",           "enum"));
     NCC_addRule(pushingRuleData.set(&pushingRuleData,         "sizeof",         "sizeof"));
@@ -260,7 +259,6 @@ void defineLanguage(struct NCC* ncc) {
                                        "   {${} ${[}  ${} ${expression} ${} ${]} } | "
                                        "   {${} ${(}  ${} ${argument-expression-list}|${ε} ${} ${)} } | "
                                        "   {${} ${.}  ${} ${identifier}} | "
-                                       "   {${} ${->} ${} ${identifier}} | "
                                        "   {${} ${++} } | "
                                        "   {${} ${--} }"
                                        "}^*"));
@@ -496,16 +494,10 @@ void defineLanguage(struct NCC* ncc) {
                                        "${} ${(} ${} ${type-name}|${constant-expression} ${} ${)}"));
 
     // Declarator,
-    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "pointer", "STUB!"));
-    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "direct-declarator", "STUB!"));
-    NCC_updateRule(pushingRuleData.set(&pushingRuleData, "declarator",
-                                       "${pointer}|${ε} ${} ${direct-declarator}"));
-
-    // Direct declarator,
     NCC_addRule   (  plainRuleData.set(&  plainRuleData, "type-qualifier-list", "STUB!"));
     NCC_addRule   (  plainRuleData.set(&  plainRuleData, "parameter-type-list", "STUB!"));
     NCC_addRule   (  plainRuleData.set(&  plainRuleData, "identifier-list", "STUB!"));
-    NCC_updateRule(pushingRuleData.set(&pushingRuleData, "direct-declarator",
+    NCC_updateRule(pushingRuleData.set(&pushingRuleData, "declarator",
                                        "{${identifier} | {(${} ${declarator} ${})}} {"
                                        "   { ${} ${[} ${}               ${type-qualifier-list}|${ε} ${}               ${assignment-expression}|${ε} ${} ${]}} | "
                                        "   { ${} ${[} ${} ${static} ${} ${type-qualifier-list}|${ε} ${}               ${assignment-expression}      ${} ${]}} | "
@@ -514,10 +506,6 @@ void defineLanguage(struct NCC* ncc) {
                                        "   { ${} ${(} ${} ${parameter-type-list}  ${} ${)}} | "
                                        "   { ${} ${(} ${} ${identifier-list}|${ε} ${} ${)}}"
                                        "}^*"));
-
-    // Pointer,
-    NCC_updateRule(  plainRuleData.set(&  plainRuleData, "pointer",
-                                       "${pointer*} ${} ${type-qualifier-list}|${ε} ${} ${pointer}|${ε}"));
 
     // Type qualifier list,
     NCC_updateRule(  plainRuleData.set(&  plainRuleData, "type-qualifier-list",
@@ -553,22 +541,15 @@ void defineLanguage(struct NCC* ncc) {
                                        "${specifier-qualifier-list} ${} ${abstract-declarator}|${ε}"));
 
     // Abstract declarator,
-    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "direct-abstract-declarator", "STUB!"));
-    NCC_updateRule(  plainRuleData.set(&  plainRuleData, "abstract-declarator",
-                                       "${pointer} | "
-                                       "{ ${pointer}|${ε} ${} ${direct-abstract-declarator} }"));
-
-    // Direct abstract declarator,
-    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "direct-abstract-declarator-content",
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "abstract-declarator-content",
                                        "{${(} ${} ${abstract-declarator} ${} ${)} } | "
                                        "{${[} ${}              ${type-qualifier-list}|${ε} ${}              ${assignment-expression}|${ε} ${} ${]} } | "
                                        "{${[} ${} static ${}   ${type-qualifier-list}|${ε} ${}              ${assignment-expression}      ${} ${]} } | "
                                        "{${[} ${}              ${type-qualifier-list}      ${} static ${}   ${assignment-expression}      ${} ${]} } | "
-                                       "{${[} ${} \\*    ${}                                                                                  ${]} } | "
                                        "{${(} ${} ${parameter-type-list}|${ε} ${} ${)} }"));
-    NCC_updateRule(  plainRuleData.set(&  plainRuleData, "direct-abstract-declarator",
-                                       "${direct-abstract-declarator-content} {"
-                                       "   ${} ${direct-abstract-declarator-content}"
+    NCC_updateRule(  plainRuleData.set(&  plainRuleData, "abstract-declarator",
+                                       "${abstract-declarator-content} {"
+                                       "   ${} ${abstract-declarator-content}"
                                        "}^*"));
 
     // Initializer,
