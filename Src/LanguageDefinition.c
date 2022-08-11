@@ -1,4 +1,11 @@
 
+//
+// Addaat language syntax.
+//
+// By Omar El Sayyed.
+// The 8th of August, 2022.
+//
+
 #include <LanguageDefinition.h>
 
 #include <NCC.h>
@@ -374,6 +381,8 @@ void defineLanguage(struct NCC* ncc) {
     // -------------------------------------
     // Declarations,
     // -------------------------------------
+
+    // TODO: remove the need to write "class" before declaring a class...
 
     // Declaration,
     NCC_addRule   (  plainRuleData.set(&  plainRuleData, "declaration-specifiers", "STUB!"));
