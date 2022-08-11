@@ -98,8 +98,7 @@ void defineLanguage(struct NCC* ncc) {
     NCC_addRule(pushingRuleData.set(&pushingRuleData,             "++",             "++"));
     NCC_addRule(pushingRuleData.set(&pushingRuleData,             "--",         "\\-\\-"));
     NCC_addRule(pushingRuleData.set(&pushingRuleData,            "...",            "..."));
-    // TODO: turn into class...
-    NCC_addRule(pushingRuleData.set(&pushingRuleData,         "struct",         "struct"));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,          "class",          "class"));
     NCC_addRule(pushingRuleData.set(&pushingRuleData,           "enum",           "enum"));
     NCC_addRule(pushingRuleData.set(&pushingRuleData,         "sizeof",         "sizeof"));
     NCC_addRule(pushingRuleData.set(&pushingRuleData,             "if",             "if"));
@@ -415,7 +414,7 @@ void defineLanguage(struct NCC* ncc) {
 
     // Type specifier,
     NCC_addRule   (  plainRuleData.set(&  plainRuleData, "atomic-type-specifier", "STUB!"));
-    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "struct-specifier", "STUB!"));
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "class-specifier", "STUB!"));
     NCC_addRule   (  plainRuleData.set(&  plainRuleData, "enum-specifier", "STUB!"));
     NCC_updateRule(pushingRuleData.set(&pushingRuleData, "type-specifier",
                                        "#{{void}     {char}            "
@@ -423,44 +422,44 @@ void defineLanguage(struct NCC* ncc) {
                                        "  {float}    {double}          "
                                        "  {signed}   {unsigned}        "
                                        "  {atomic-type-specifier}      "
-                                       "  {struct-specifier}  "
+                                       "  {class-specifier}  "
                                        "  {enum-specifier}             "
                                        "  {identifier} != {identifier}}"));
 
-    // Struct specifier,
-    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "struct-declaration-list", "STUB!"));
-    NCC_updateRule(pushingRuleData.set(&pushingRuleData, "struct-specifier",
-                                       "${struct} ${+ }"
-                                       "{{${identifier}}|${ε} ${+ } ${OB} ${+\n} ${} ${struct-declaration-list} ${} ${CB}} | "
+    // Class specifier,
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "class-declaration-list", "STUB!"));
+    NCC_updateRule(pushingRuleData.set(&pushingRuleData, "class-specifier",
+                                       "${class} ${+ }"
+                                       "{{${identifier}}|${ε} ${+ } ${OB} ${+\n} ${} ${class-declaration-list} ${} ${CB}} | "
                                        " {${identifier}}"));
 
-    // Struct declaration list,
-    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "struct-declaration", "STUB!"));
-    NCC_updateRule(  plainRuleData.set(&  plainRuleData, "struct-declaration-list",
-                                       "${struct-declaration} { "
-                                       "   ${} ${struct-declaration}"
+    // Class declaration list,
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "class-declaration", "STUB!"));
+    NCC_updateRule(  plainRuleData.set(&  plainRuleData, "class-declaration-list",
+                                       "${class-declaration} { "
+                                       "   ${} ${class-declaration}"
                                        "}^*"));
 
-    // Struct declaration,
+    // Class declaration,
     NCC_addRule   (  plainRuleData.set(&  plainRuleData, "specifier-qualifier-list", "STUB!"));
-    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "struct-declarator-list", "STUB!"));
-    NCC_updateRule(pushingRuleData.set(&pushingRuleData, "struct-declaration",
-                                       "{${specifier-qualifier-list} ${+ } ${struct-declarator-list}|${ε} ${} ${;} ${+\n}}"));
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "class-declarator-list", "STUB!"));
+    NCC_updateRule(pushingRuleData.set(&pushingRuleData, "class-declaration",
+                                       "{${specifier-qualifier-list} ${+ } ${class-declarator-list}|${ε} ${} ${;} ${+\n}}"));
 
     // Specifier qualifier list,
     NCC_updateRule(  plainRuleData.set(&  plainRuleData, "specifier-qualifier-list",
                                        "#{{type-specifier} {type-qualifier}}"
                                        "{${+ } ${specifier-qualifier-list}}|${ε}"));
 
-    // Struct declarator list,
-    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "struct-declarator", "STUB!"));
-    NCC_updateRule(  plainRuleData.set(&  plainRuleData, "struct-declarator-list",
-                                       "${struct-declarator} { "
-                                       "   ${} ${,} ${+ } ${struct-declarator}"
+    // Class declarator list,
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "class-declarator", "STUB!"));
+    NCC_updateRule(  plainRuleData.set(&  plainRuleData, "class-declarator-list",
+                                       "${class-declarator} { "
+                                       "   ${} ${,} ${+ } ${class-declarator}"
                                        "}^*"));
 
-    // Struct declarator,
-    NCC_updateRule(  plainRuleData.set(&  plainRuleData, "struct-declarator",
+    // Class declarator,
+    NCC_updateRule(  plainRuleData.set(&  plainRuleData, "class-declarator",
                                        " {${declarator}} | "
                                        "{{${declarator}}|${ε} ${} ${:} ${+ } ${constant-expression}}"));
 
