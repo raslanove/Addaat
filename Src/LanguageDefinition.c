@@ -13,9 +13,124 @@ static boolean printListener(struct NCC_MatchingData* matchingData) {
 
 void defineLanguage(struct NCC* ncc) {
 
+    // Notes:
+    // ======
+    //  Leave right recursion as is.
+    //  Convert left recursion into repeat or right recursion (note that right recursion inverses the order of operations).
+    //    Example:
+    //    ========
+    //      Rule:
+    //      -----
+    //         shift-expression:
+    //            additive-expression
+    //            shift-expression << additive-expression
+    //            shift-expression >> additive-expression
+    //      Becomes:
+    //      --------
+    //         shift-expression:
+    //            ${additive-expression} {
+    //               { << ${additive-expression}} |
+    //               { >> ${additive-expression}}
+    //            }^*
+    //      Or:
+    //      --
+    //         shift-expression:
+    //            ${additive-expression} |
+    //            { ${additive-expression} << ${shift-expression}} |
+    //            { ${additive-expression} >> ${shift-expression}}
+    //
+
+    // TODO: do we need a ${} when all unnecessary whitespaces should be removed during pre-processing?
+    //       ${} could necessary for code coloring, and not for compiling. This should be more obvious
+    //       upon implementation.
+
     struct NCC_RuleData plainRuleData, pushingRuleData;
     NCC_initializeRuleData(&  plainRuleData, ncc, "", "",                 0,                 0,                0);
     NCC_initializeRuleData(&pushingRuleData, ncc, "", "", NCC_createASTNode, NCC_deleteASTNode, NCC_matchASTNode);
+
+    // =====================================
+    // Lexical rules,
+    // =====================================
+
+    // Tokens,
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,              "+",              "+"));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,              "-",            "\\-"));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,              "*",            "\\*"));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,              "/",              "/"));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,              "%",              "%"));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,              "!",              "!"));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,              "~",              "~"));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,              "&",              "&"));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,              "|",            "\\|"));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,              "^",            "\\^"));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,             "<<",             "<<"));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,             ">>",             ">>"));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,              "=",              "="));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,             "+=",             "+="));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,             "-=",        "\\-\\-="));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,             "*=",           "\\*="));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,             "/=",             "/="));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,             "%=",             "%="));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,            "<<=",            "<<="));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,            ">>=",            ">>="));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,             "^=",           "\\^="));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,             "&=",             "&="));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,             "|=",           "\\|="));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,             "==",             "=="));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,             "!=",             "!="));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,              "<",              "<"));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,              ">",              ">"));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,             "<=",             "<="));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,             ">=",             ">="));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,             "&&",             "&&"));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,             "||",         "\\|\\|"));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,              "(",              "("));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,              ")",              ")"));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,              "[",              "["));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,              "]",              "]"));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,             "OB",            "\\{"));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,             "CB",            "\\}"));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,              ":",              ":"));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,              ";",              ";"));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,              "?",              "?"));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,              ",",              ","));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,              ".",              "."));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,             "->",           "\\->"));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,             "++",             "++"));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,             "--",         "\\-\\-"));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,            "...",            "..."));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,       "pointer*",            "\\*"));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,         "struct",         "struct"));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,           "enum",           "enum"));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,         "sizeof",         "sizeof"));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,             "if",             "if"));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,           "else",           "else"));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,          "while",          "while"));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,             "do",             "do"));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,            "for",            "for"));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,       "continue",       "continue"));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,          "break",          "break"));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,         "return",         "return"));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,         "switch",         "switch"));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,           "case",           "case"));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,        "default",        "default"));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,           "goto",           "goto"));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,           "void",           "void"));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,           "char",           "char"));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,          "short",          "short"));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,            "int",            "int"));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,           "long",           "long"));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,          "float",          "float"));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,         "double",         "double"));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,         "signed",         "signed"));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,       "unsigned",       "unsigned"));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,         "static",         "static"));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,          "const",          "const"));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,         "inline",         "inline"));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData,           "auto",           "auto"));
+
+    // Space markers (forward declaration),
+    NCC_addRule(pushingRuleData.set(&pushingRuleData, "insert space", ""));
 
     // Spaces and comments,
     NCC_addRule(  plainRuleData.set(&  plainRuleData, "ε", ""));
@@ -27,7 +142,15 @@ void defineLanguage(struct NCC* ncc) {
     NCC_addRule(  plainRuleData.set(&  plainRuleData,  "",              "${ignorable}^*"));
     NCC_addRule(  plainRuleData.set(&  plainRuleData, " ", "${ignorable} ${ignorable}^*"));
 
-    // Literals,
+    // Space markers (implementation),
+    NCC_addRule(  plainRuleData.set(&  plainRuleData, "+ ", "${} ${insert space}"));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData, "insert \n" , ""));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData, "insert \ns", ""));
+    NCC_addRule(  plainRuleData.set(&  plainRuleData, "+\n" , "${} ${insert \n}"));
+    NCC_addRule(  plainRuleData.set(&  plainRuleData, "+\ns", "${} ${insert \ns}"));
+
+    // TODO: use the non-ignorable white-spaces where they should be (like, between "int" and "a" in "int a;").
+
     NCC_addRule(  plainRuleData.set(&  plainRuleData, "digit", "0-9"));
     NCC_addRule(  plainRuleData.set(&  plainRuleData, "non-zero-digit", "1-9"));
     NCC_addRule(  plainRuleData.set(&  plainRuleData, "non-digit", "_|a-z|A-Z"));
@@ -77,6 +200,8 @@ void defineLanguage(struct NCC* ncc) {
     NCC_addRule(pushingRuleData.set(&pushingRuleData, "character-constant", "L|u|U|${ε} ' { ${c-char}|${hexadecimal-escape-sequence}|${universal-character-name}|{\\\\${c-char-with-backslash-without-uUxX}} }^* '"));
 
     // Constant,
+    //NCC_addRule(pushingRuleData.set(&pushingRuleData, "constant", "${integer-constant} | ${floating-constant} | ${enumeration-constant} | ${character-constant}"));
+    //NCC_addRule(pushingRuleData.set(&pushingRuleData, "constant", "#{{integer-constant} {floating-constant} {enumeration-constant} {character-constant}}"));
     NCC_addRule(pushingRuleData.set(&pushingRuleData, "constant", "#{{integer-constant} {floating-constant} {enumeration-constant} {character-constant}}"));
 
     // String literal,
@@ -84,8 +209,515 @@ void defineLanguage(struct NCC* ncc) {
     NCC_addRule(pushingRuleData.set(&pushingRuleData, "string-literal-fragment", "{u8}|u|U|L|${ε} \" { ${c-char}|${hexadecimal-escape-sequence}|${universal-character-name}|{\\\\${c-char-with-backslash-without-uUxX}} }^* \""));
     NCC_addRule(pushingRuleData.set(&pushingRuleData, "string-literal", "${string-literal-fragment} {${} ${string-literal-fragment}}|${ε}"));
 
+    // =====================================
+    // Phrase structure,
+    // =====================================
+
+    // -------------------------------------
+    // Expressions,
+    // -------------------------------------
+
+    // Primary expression,
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "expression", "STUB!"));
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "generic-selection", "STUB!"));
+    NCC_addRule   (pushingRuleData.set(&pushingRuleData, "primary-expression",
+                                       "${identifier} | "
+                                       "${constant} | "
+                                       "${string-literal} | "
+                                       "{ ${(} ${} ${expression} ${} ${)} } | "
+                                       "${generic-selection}"));
+
+    // Generic selection,
+    // See: https://www.geeksforgeeks.org/_generic-keyword-c/
+    //#define INC(x) _Generic((x), long double: INCl, default: INC, float: INCf)(x)
+    //NLOGE("", "%d\n", _Generic(1, int: 7, float:1, double:2, long double:3, default:0));
+    NCC_addRule   (plainRuleData.set(&plainRuleData, "assignment-expression", "STUB!"));
+    NCC_addRule   (plainRuleData.set(&plainRuleData, "generic-assoc-list", "STUB!"));
+    NCC_updateRule(plainRuleData.set(&plainRuleData, "generic-selection",
+                                     "_Generic ${} ${(} ${} ${assignment-expression} ${} ${,} ${} ${generic-assoc-list} ${} ${)}"));
+
+    // Generic assoc list,
+    NCC_addRule   (plainRuleData.set(&plainRuleData, "generic-association", "STUB!"));
+    NCC_updateRule(plainRuleData.set(&plainRuleData, "generic-assoc-list",
+                                     "${generic-association} {"
+                                     "   ${} ${,} ${} ${generic-association}"
+                                     "}^*"));
+
+    // Generic association,
+    NCC_addRule   (plainRuleData.set(&plainRuleData, "type-name", "STUB!"));
+    NCC_updateRule(plainRuleData.set(&plainRuleData, "generic-association",
+                                     "{${type-name} ${} ${:} ${} ${assignment-expression}} |"
+                                     "{default      ${} ${:} ${} ${assignment-expression}}"));
+
+    // Postfix expression,
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "argument-expression-list", "STUB!"));
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "initializer-list", "STUB!"));
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "postfix-expression-contents",
+                                       "${primary-expression} | "
+                                       "{ ${(} ${} ${type-name} ${} ${)} ${} ${OB} ${} ${initializer-list} ${} {${,} ${+ }}|${ε} ${} ${CB} }"));
+    NCC_addRule   (pushingRuleData.set(&pushingRuleData, "postfix-expression",
+                                       "${postfix-expression-contents} {"
+                                       "   {${} ${[}  ${} ${expression} ${} ${]} } | "
+                                       "   {${} ${(}  ${} ${argument-expression-list}|${ε} ${} ${)} } | "
+                                       "   {${} ${.}  ${} ${identifier}} | "
+                                       "   {${} ${->} ${} ${identifier}} | "
+                                       "   {${} ${++} } | "
+                                       "   {${} ${--} }"
+                                       "}^*"));
+
+    // Argument expression list,
+    NCC_updateRule(plainRuleData.set(&plainRuleData, "argument-expression-list",
+                                     "${assignment-expression} {"
+                                     "   ${} ${,} ${+ } ${assignment-expression}"
+                                     "}^*"));
+
+    // Unary expression,
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "unary-expression", "STUB!"));
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "unary-operator", "STUB!"));
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "cast-expression", "STUB!"));
+    NCC_updateRule(pushingRuleData.set(&pushingRuleData, "unary-expression",
+                                       "${postfix-expression} | "
+                                       "{ ${++} ${} ${unary-expression} } | "
+                                       "{ ${--} ${} ${unary-expression} } | "
+                                       "{ ${unary-operator} ${} ${cast-expression} } | "
+                                       "{   ${sizeof} ${} ${(} ${} ${unary-expression} ${} ${)} } | "
+                                       "{   ${sizeof} ${} ${(} ${} ${type-name}        ${} ${)} }"));
+
+    // Unary operator,
+    NCC_updateRule(  plainRuleData.set(&  plainRuleData, "unary-operator", "#{{&}{*}{+}{-}{~}{!} {&&}{++}{--} != {&&}{++}{--}}"));
+
+    // Cast expression,
+    NCC_updateRule(pushingRuleData.set(&pushingRuleData, "cast-expression",
+                                       "${unary-expression} | "
+                                       "{ ${(} ${} ${type-name} ${} ${)} ${} ${cast-expression} }"));
+
+    // Multiplicative expression,
+    NCC_addRule   (pushingRuleData.set(&pushingRuleData, "multiplicative-expression",
+                                       "${cast-expression} {"
+                                       "   ${+ } ${*}|${/}|${%} ${+ } ${cast-expression}"
+                                       "}^*"));
+
+    // Additive expression,
+    NCC_addRule   (pushingRuleData.set(&pushingRuleData, "additive-expression",
+                                       "${multiplicative-expression} {"
+                                       "   ${+ } ${+}|${-} ${+ } ${multiplicative-expression}"
+                                       "}^*"));
+
+    // Shift expression,
+    NCC_addRule   (pushingRuleData.set(&pushingRuleData, "shift-expression",
+                                       "${additive-expression} {"
+                                       "   ${+ } ${<<}|${>>} ${+ } ${additive-expression}"
+                                       "}^*"));
+
+    // Relational expression,
+    NCC_addRule   (pushingRuleData.set(&pushingRuleData, "relational-expression",
+                                       "${shift-expression} {"
+                                       "   ${+ } #{{<} {>} {<=} {>=}} ${+ } ${shift-expression}"
+                                       "}^*"));
+
+    // Equality expression,
+    NCC_addRule   (pushingRuleData.set(&pushingRuleData, "equality-expression",
+                                       "${relational-expression} {"
+                                       "   ${+ } ${==}|${!=} ${+ } ${relational-expression}"
+                                       "}^*"));
+
+    // AND expression,
+    NCC_addRule   (pushingRuleData.set(&pushingRuleData, "and-expression",
+                                       "${equality-expression} {"
+                                       "   ${+ } #{{&} {&&} != {&&}} ${+ } ${equality-expression}"
+                                       "}^*"));
+
+    // Exclusive OR expression,
+    NCC_addRule   (pushingRuleData.set(&pushingRuleData, "xor-expression",
+                                       "${and-expression} {"
+                                       "   ${+ } ${^} ${+ } ${and-expression}"
+                                       "}^*"));
+
+    // Inclusive OR expression,
+    NCC_addRule   (pushingRuleData.set(&pushingRuleData, "or-expression",
+                                       "${xor-expression} {"
+                                       "   ${+ } #{{|} {||} != {||}} ${+ } ${xor-expression}"
+                                       "}^*"));
+
+    // Logical AND expression,
+    NCC_addRule   (pushingRuleData.set(&pushingRuleData, "logical-and-expression",
+                                       "${or-expression} {"
+                                       "   ${+ } ${&&} ${+ } ${or-expression}"
+                                       "}^*"));
+
+    // Logical OR expression,
+    NCC_addRule   (pushingRuleData.set(&pushingRuleData, "logical-or-expression",
+                                       "${logical-and-expression} {"
+                                       "   ${+ } ${||} ${+ } ${logical-and-expression}"
+                                       "}^*"));
+
+    // Conditional expression,
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "conditional-expression", "STUB!"));
+    NCC_updateRule(pushingRuleData.set(&pushingRuleData, "conditional-expression",
+                                       "${logical-or-expression} | "
+                                       "{${logical-or-expression} ${+ } ${?} ${+ } ${expression} ${+ } ${:} ${+ } ${conditional-expression}}"));
+
+    // Assignment expression,
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "assignment-operator", "STUB!"));
+    NCC_updateRule(pushingRuleData.set(&pushingRuleData, "assignment-expression",
+                                       "${conditional-expression} | "
+                                       "{${unary-expression} ${+ } ${assignment-operator} ${+ } ${assignment-expression}}"));
+
+    // Assignment operator,
+    NCC_updateRule(  plainRuleData.set(&  plainRuleData, "assignment-operator", "#{{=} {*=} {/=} {%=} {+=} {-=} {<<=} {>>=} {&=} {^=} {|=}}"));
+
+    // Expression,
+    NCC_updateRule(pushingRuleData.set(&pushingRuleData, "expression",
+                                       "${assignment-expression} {"
+                                       "   ${} ${,} ${} ${assignment-expression}"
+                                       "}^*"));
+
+    NCC_addRule   (pushingRuleData.set(&pushingRuleData, "constant-expression", "${conditional-expression}"));
+
+    // -------------------------------------
+    // Declarations,
+    // -------------------------------------
+
+    // Declaration,
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "declaration-specifiers", "STUB!"));
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "init-declarator-list", "STUB!"));
+    NCC_addRule   (pushingRuleData.set(&pushingRuleData, "declaration",
+                                       "{${declaration-specifiers} {${+ } ${init-declarator-list}}|${ε} ${} ${;} }"));
+
+    // Declaration specifiers,
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "storage-class-specifier", "STUB!"));
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "type-specifier", "STUB!"));
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "type-qualifier", "STUB!"));
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "function-specifier", "STUB!"));
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "alignment-specifier", "STUB!"));
+    NCC_updateRule(pushingRuleData.set(&pushingRuleData, "declaration-specifiers",
+                                       "#{{storage-class-specifier} "
+                                       "            {type-specifier}"
+                                       "            {type-qualifier}"
+                                       "            {function-specifier}"
+                                       "            {alignment-specifier}}"
+                                       "{${+ } ${declaration-specifiers}}|${ε}"));
+
+    // Init declarator list,
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "init-declarator", "STUB!"));
+    NCC_updateRule(pushingRuleData.set(&pushingRuleData, "init-declarator-list",
+                                       "${init-declarator} { "
+                                       "   ${} ${,} ${+ } ${init-declarator}"
+                                       "}^*"));
+
+    // Init declarator,
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "declarator", "STUB!"));
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "initializer", "STUB!"));
+    NCC_updateRule(pushingRuleData.set(&pushingRuleData, "init-declarator",
+                                       "${declarator} {${+ } ${=} ${+ } ${initializer}}|${ε}"));
+
+    // Storage class specifier,
+    NCC_updateRule(pushingRuleData.set(&pushingRuleData, "storage-class-specifier",
+                                       "#{{static} {auto} {identifier} != {identifier}}"));
+
+    // Type specifier,
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "atomic-type-specifier", "STUB!"));
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "struct-specifier", "STUB!"));
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "enum-specifier", "STUB!"));
+    NCC_updateRule(pushingRuleData.set(&pushingRuleData, "type-specifier",
+                                       "#{{void}     {char}            "
+                                       "  {short}    {int}      {long} "
+                                       "  {float}    {double}          "
+                                       "  {signed}   {unsigned}        "
+                                       "  {atomic-type-specifier}      "
+                                       "  {struct-specifier}  "
+                                       "  {enum-specifier}             "
+                                       "  {identifier} != {identifier}}"));
+
+    // Struct specifier,
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "struct-declaration-list", "STUB!"));
+    NCC_updateRule(pushingRuleData.set(&pushingRuleData, "struct-specifier",
+                                       "${struct} ${+ }"
+                                       "{{${identifier}}|${ε} ${+ } ${OB} ${+\n} ${} ${struct-declaration-list} ${} ${CB}} | "
+                                       " {${identifier}}"));
+
+    // Struct declaration list,
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "struct-declaration", "STUB!"));
+    NCC_updateRule(  plainRuleData.set(&  plainRuleData, "struct-declaration-list",
+                                       "${struct-declaration} { "
+                                       "   ${} ${struct-declaration}"
+                                       "}^*"));
+
+    // Struct declaration,
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "specifier-qualifier-list", "STUB!"));
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "struct-declarator-list", "STUB!"));
+    NCC_updateRule(pushingRuleData.set(&pushingRuleData, "struct-declaration",
+                                       "{${specifier-qualifier-list} ${+ } ${struct-declarator-list}|${ε} ${} ${;} ${+\n}}"));
+
+    // Specifier qualifier list,
+    NCC_updateRule(  plainRuleData.set(&  plainRuleData, "specifier-qualifier-list",
+                                       "#{{type-specifier} {type-qualifier}}"
+                                       "{${+ } ${specifier-qualifier-list}}|${ε}"));
+
+    // Struct declarator list,
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "struct-declarator", "STUB!"));
+    NCC_updateRule(  plainRuleData.set(&  plainRuleData, "struct-declarator-list",
+                                       "${struct-declarator} { "
+                                       "   ${} ${,} ${+ } ${struct-declarator}"
+                                       "}^*"));
+
+    // Struct declarator,
+    NCC_updateRule(  plainRuleData.set(&  plainRuleData, "struct-declarator",
+                                       " {${declarator}} | "
+                                       "{{${declarator}}|${ε} ${} ${:} ${+ } ${constant-expression}}"));
+
+    // Enum specifier,
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "enumerator-list", "STUB!"));
+    NCC_updateRule(  plainRuleData.set(&  plainRuleData, "enum-specifier",
+                                       "{ ${enum} ${} ${identifier}|${ε} ${} ${OB} ${enumerator-list} ${} ${,}|${ε} ${} ${CB} } | "
+                                       "{ ${enum} ${} ${identifier} }"));
+
+    // Enumerator list,
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "enumerator", "STUB!"));
+    NCC_updateRule(  plainRuleData.set(&  plainRuleData, "enumerator-list",
+                                       "${enumerator} {"
+                                       "   ${} ${,} ${+ } ${enumerator}"
+                                       "}^*"));
+
+    // Enumerator,
+    NCC_updateRule(  plainRuleData.set(&  plainRuleData, "enumerator",
+                                       "${enumeration-constant} { ${} = ${} ${constant-expression} }|${ε}"));
+
+    // Type qualifier,
+    NCC_updateRule(  plainRuleData.set(&  plainRuleData, "type-qualifier",
+                                       "#{{const} {identifier} != {identifier}}"));
+
+    // Function specifier,
+    NCC_updateRule(  plainRuleData.set(&  plainRuleData, "function-specifier",
+                                       "#{{inline} {identifier} != {identifier}}"));
+
+    // Alignment specifier,
+    NCC_updateRule(  plainRuleData.set(&  plainRuleData, "alignment-specifier",
+                                       "${} ${(} ${} ${type-name}|${constant-expression} ${} ${)}"));
+
+    // Declarator,
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "pointer", "STUB!"));
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "direct-declarator", "STUB!"));
+    NCC_updateRule(pushingRuleData.set(&pushingRuleData, "declarator",
+                                       "${pointer}|${ε} ${} ${direct-declarator}"));
+
+    // Direct declarator,
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "type-qualifier-list", "STUB!"));
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "parameter-type-list", "STUB!"));
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "identifier-list", "STUB!"));
+    NCC_updateRule(pushingRuleData.set(&pushingRuleData, "direct-declarator",
+                                       "{${identifier} | {(${} ${declarator} ${})}} {"
+                                       "   { ${} ${[} ${}               ${type-qualifier-list}|${ε} ${}               ${assignment-expression}|${ε} ${} ${]}} | "
+                                       "   { ${} ${[} ${} ${static} ${} ${type-qualifier-list}|${ε} ${}               ${assignment-expression}      ${} ${]}} | "
+                                       "   { ${} ${[} ${}               ${type-qualifier-list}      ${} ${static} ${} ${assignment-expression}      ${} ${]}} | "
+                                       "   { ${} ${[} ${}               ${type-qualifier-list}|${ε} ${} ${*}      ${}                                   ${]}} | "
+                                       "   { ${} ${(} ${} ${parameter-type-list}  ${} ${)}} | "
+                                       "   { ${} ${(} ${} ${identifier-list}|${ε} ${} ${)}}"
+                                       "}^*"));
+
+    // Pointer,
+    NCC_updateRule(  plainRuleData.set(&  plainRuleData, "pointer",
+                                       "${pointer*} ${} ${type-qualifier-list}|${ε} ${} ${pointer}|${ε}"));
+
+    // Type qualifier list,
+    NCC_updateRule(  plainRuleData.set(&  plainRuleData, "type-qualifier-list",
+                                       "${type-qualifier} {"
+                                       "   ${} ${type-qualifier}"
+                                       "}^*"));
+
+    // Parameter type list,
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "parameter-list", "STUB!"));
+    NCC_updateRule(pushingRuleData.set(&pushingRuleData, "parameter-type-list",
+                                       "${parameter-list} {${} ${,} ${+ } ${...} }|${ε}"));
+
+    // Parameter list,
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "parameter-declaration", "STUB!"));
+    NCC_updateRule(  plainRuleData.set(&  plainRuleData, "parameter-list",
+                                       "${parameter-declaration} {"
+                                       "   ${} ${,} ${+ } ${parameter-declaration}"
+                                       "}^*"));
+
+    // Parameter declaration,
+    NCC_addRule   (pushingRuleData.set(&pushingRuleData, "abstract-declarator", "STUB!"));
+    NCC_updateRule(pushingRuleData.set(&pushingRuleData, "parameter-declaration",
+                                       "${declaration-specifiers} ${} {${+ } ${declarator}}|${abstract-declarator}|${ε}"));
+
+    // Identifier list,
+    NCC_updateRule(  plainRuleData.set(&  plainRuleData, "identifier-list",
+                                       "${identifier} {"
+                                       "   ${} ${,} ${} ${identifier}"
+                                       "}^*"));
+
+    // Type name,
+    NCC_updateRule(  plainRuleData.set(&  plainRuleData, "type-name",
+                                       "${specifier-qualifier-list} ${} ${abstract-declarator}|${ε}"));
+
+    // Abstract declarator,
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "direct-abstract-declarator", "STUB!"));
+    NCC_updateRule(  plainRuleData.set(&  plainRuleData, "abstract-declarator",
+                                       "${pointer} | "
+                                       "{ ${pointer}|${ε} ${} ${direct-abstract-declarator} }"));
+
+    // Direct abstract declarator,
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "direct-abstract-declarator-content",
+                                       "{${(} ${} ${abstract-declarator} ${} ${)} } | "
+                                       "{${[} ${}              ${type-qualifier-list}|${ε} ${}              ${assignment-expression}|${ε} ${} ${]} } | "
+                                       "{${[} ${} static ${}   ${type-qualifier-list}|${ε} ${}              ${assignment-expression}      ${} ${]} } | "
+                                       "{${[} ${}              ${type-qualifier-list}      ${} static ${}   ${assignment-expression}      ${} ${]} } | "
+                                       "{${[} ${} \\*    ${}                                                                                  ${]} } | "
+                                       "{${(} ${} ${parameter-type-list}|${ε} ${} ${)} }"));
+    NCC_updateRule(  plainRuleData.set(&  plainRuleData, "direct-abstract-declarator",
+                                       "${direct-abstract-declarator-content} {"
+                                       "   ${} ${direct-abstract-declarator-content}"
+                                       "}^*"));
+
+    // Initializer,
+    NCC_updateRule(  plainRuleData.set(&  plainRuleData, "initializer",
+                                       "${assignment-expression} | "
+                                       "{ ${OB} ${} ${initializer-list} ${} ${,}|${ε} ${} ${CB} }"));
+
+    // Initializer list,
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "designation", "STUB!"));
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "initializer-list-content",
+                                       "${designation}|${ε} ${} ${initializer}"));
+    NCC_updateRule(  plainRuleData.set(&  plainRuleData, "initializer-list",
+                                       "${initializer-list-content} {"
+                                       "   ${} ${,} ${} ${initializer-list-content}"
+                                       "}^*"));
+
+    // Designation,
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "designator-list", "STUB!"));
+    NCC_updateRule(  plainRuleData.set(&  plainRuleData, "designation",
+                                       "${designator-list} ${} ${=}"));
+
+    // Designator list,
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "designator", "STUB!"));
+    NCC_updateRule(  plainRuleData.set(&  plainRuleData, "designator-list",
+                                       "${designator} {"
+                                       "   ${} ${designator}"
+                                       "}^*"));
+
+    // Designator,
+    NCC_updateRule(  plainRuleData.set(&  plainRuleData, "designator",
+                                       "{ ${[} ${} ${constant-expression} ${} ${]} } | "
+                                       "{ ${.} ${} ${identifier}}"));
+
+    // -------------------------------------
+    // Statements,
+    // -------------------------------------
+
+    // Statement,
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData,    "labeled-statement", "STUB!"));
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData,   "compound-statement", "STUB!"));
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "expression-statement", "STUB!"));
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData,  "selection-statement", "STUB!"));
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData,  "iteration-statement", "STUB!"));
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData,       "jump-statement", "STUB!"));
+    NCC_addRule   (pushingRuleData.set(&pushingRuleData, "statement",
+                                       "#{   {labeled-statement}"
+                                       "    {compound-statement}"
+                                       "  {expression-statement}"
+                                       "   {selection-statement}"
+                                       "   {iteration-statement}"
+                                       "        {jump-statement}}"));
+
+    // Labeled statement,
+    NCC_updateRule(pushingRuleData.set(&pushingRuleData, "labeled-statement",
+                                       "{${identifier}                      ${} ${:} ${} ${statement}} | "
+                                       "{${case} ${} ${constant-expression} ${} ${:} ${} ${statement}} | "
+                                       "{${default}                         ${} ${:} ${} ${statement}}"));
+
+    // Compound statement,
+    NCC_addRule   (pushingRuleData.set(&pushingRuleData, "block-item-list", "STUB!"));
+    NCC_updateRule(pushingRuleData.set(&pushingRuleData, "compound-statement",
+                                       "${OB} ${} ${block-item-list}|${ε} ${} ${CB}"));
+
+    // Block item list,
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "block-item", "STUB!"));
+    NCC_updateRule(  plainRuleData.set(&  plainRuleData, "block-item-list",
+                                       "${+\n} ${block-item} {{"
+                                       "   ${+\n} ${block-item}"
+                                       "}^*} ${+\n}"));
+
+    // Block item,
+    NCC_updateRule(  plainRuleData.set(&  plainRuleData, "block-item",
+                                       "#{{declaration} {statement}}"));
+
+    // Expression statement,
+    NCC_updateRule(pushingRuleData.set(&pushingRuleData, "expression-statement",
+                                       "${expression}|${ε} ${} ${;}"));
+
+    // Selection statement,
+    NCC_updateRule(pushingRuleData.set(&pushingRuleData, "selection-statement",
+                                       "{ ${if}     ${} ${(} ${} ${expression} ${} ${)} ${} ${statement} {${} ${else} ${} ${statement}}|${ε} } | "
+                                       "{ ${switch} ${} ${(} ${} ${expression} ${} ${)} ${} ${statement}                                     }"));
+
+    // Iteration statement,
+    NCC_updateRule(pushingRuleData.set(&pushingRuleData, "iteration-statement",
+                                       "{ ${while} ${+ }                           ${(} ${} ${expression} ${} ${)} ${} ${;}|{${+ } ${statement}} } | "
+                                       "{ ${do}    ${+ } ${statement} ${} ${while} ${(} ${} ${expression} ${} ${)} ${} ${;}                      } | "
+                                       "{ ${for}   ${+ } ${(} ${} ${expression}|${ε} ${} ${;} ${+ } ${expression}|${ε} ${} ${;} ${+ } ${expression}|${ε} ${} ${)} ${} ${;}|{${+ } ${statement}} } | "
+                                       "{ ${for}   ${+ } ${(} ${} ${declaration}              ${+ } ${expression}|${ε} ${} ${;} ${+ } ${expression}|${ε} ${} ${)} ${} ${;}|{${+ } ${statement}} }"));
+
+    // Jump statement,
+    NCC_updateRule(pushingRuleData.set(&pushingRuleData, "jump-statement",
+                                       "{ ${goto}     ${} ${identifier}      ${} ${;} } | "
+                                       "{ ${continue} ${}                        ${;} } | "
+                                       "{ ${break}    ${}                        ${;} } | "
+                                       "{ ${return}   ${} ${expression}|${ε} ${} ${;} }"));
+
+    // -------------------------------------
+    // External definitions,
+    // -------------------------------------
+
+    // Translation unit,
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "external-declaration", "STUB!"));
+    NCC_addRule   (pushingRuleData.set(&pushingRuleData, "translation-unit",
+                                       "${} ${external-declaration} {{"
+                                       "   ${} ${+\ns} ${external-declaration}"
+                                       "}^*} ${}")); // Encapsulated the repeat in a sub-rule to avoid early termination. Can \
+                                                        we consider early termination a feature now?
+
+    // External declaration,
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "function-definition", "STUB!"));
+    NCC_updateRule(  plainRuleData.set(&  plainRuleData, "external-declaration",
+                                       "#{{function-definition} {declaration}}"));
+
+    // Function definition,
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "declaration-list", "STUB!"));
+    NCC_updateRule(pushingRuleData.set(&pushingRuleData, "function-definition",
+                                       "${declaration-specifiers} ${+ } ${declarator} ${} ${declaration-list}|${ε} ${+ } ${compound-statement} ${+\n}"));
+
+    // Declaration list,
+    NCC_updateRule(  plainRuleData.set(&  plainRuleData, "declaration-list",
+                                       "${declaration} {"
+                                       "   ${} ${declaration}"
+                                       "}^*"));
+
     // Test document,
-    NCC_addRule   (pushingRuleData.set(&pushingRuleData, "TestDocument", "${string-literal}"));
+    NCC_addRule   (pushingRuleData.set(&pushingRuleData, "TestDocument",
+                                       "#{                          "
+                                       "        {primary-expression}"
+                                       "        {postfix-expression}"
+                                       "          {unary-expression}"
+                                       "           {cast-expression}"
+                                       " {multiplicative-expression}"
+                                       "       {additive-expression}"
+                                       "          {shift-expression}"
+                                       "     {relational-expression}"
+                                       "       {equality-expression}"
+                                       "            {and-expression}"
+                                       "            {xor-expression}"
+                                       "             {or-expression}"
+                                       "    {logical-and-expression}"
+                                       "     {logical-or-expression}"
+                                       "    {conditional-expression}"
+                                       "     {assignment-expression}"
+                                       "                {expression}"
+                                       "       {constant-expression}"
+                                       "               {declaration}"
+                                       "          {translation-unit}"
+                                       "}                           "));
     NCC_setRootRule(ncc, "TestDocument");
 
     // Cleanup,
