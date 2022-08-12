@@ -288,7 +288,7 @@ void defineLanguage(struct NCC* ncc) {
                                        "{   ${sizeof} ${} ${(} ${} ${type-name}        ${} ${)} }"));
 
     // Unary operator,
-    NCC_updateRule(  plainRuleData.set(&  plainRuleData, "unary-operator", "#{{&}{*}{+}{-}{~}{!} {&&}{++}{--} != {&&}{++}{--}}"));
+    NCC_updateRule(  plainRuleData.set(&  plainRuleData, "unary-operator", "#{{+}{-}{~}{!} {++}{--} != {++}{--}}"));
 
     // Cast expression,
     NCC_updateRule(pushingRuleData.set(&pushingRuleData, "cast-expression",
@@ -382,8 +382,6 @@ void defineLanguage(struct NCC* ncc) {
     // Declarations,
     // -------------------------------------
 
-    // TODO: remove the need to write "class" before declaring a class...
-
     // Declaration,
     NCC_addRule   (  plainRuleData.set(&  plainRuleData, "declaration-specifiers", "STUB!"));
     NCC_addRule   (  plainRuleData.set(&  plainRuleData, "init-declarator-list", "STUB!"));
@@ -439,8 +437,8 @@ void defineLanguage(struct NCC* ncc) {
     NCC_addRule   (  plainRuleData.set(&  plainRuleData, "class-declaration-list", "STUB!"));
     NCC_updateRule(pushingRuleData.set(&pushingRuleData, "class-specifier",
                                        "${class} ${+ }"
-                                       "{{${identifier}}|${ε} ${+ } ${OB} ${+\n} ${} ${class-declaration-list} ${} ${CB}} | "
-                                       " {${identifier}}"));
+                                       "{${identifier}|${ε} ${+ } ${OB} ${+\n} ${} ${class-declaration-list} ${} ${CB}} | "
+                                       " ${identifier}"));
 
     // Class declaration list,
     NCC_addRule   (  plainRuleData.set(&  plainRuleData, "class-declaration", "STUB!"));

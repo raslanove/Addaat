@@ -14,6 +14,9 @@
 #include <NCString.h>
 #include <NError.h>
 
+#define PRINT_TREES 1
+#define PRINT_COLORED_TREES 1
+
 static void test(struct NCC* ncc, const char* code) {
 
     NLOGI("", "%sTesting: %s%s", NTCOLOR(GREEN_BRIGHT), NTCOLOR(BLUE_BRIGHT), code);
@@ -58,9 +61,15 @@ void NMain() {
     defineLanguage(&ncc);
 
     // Test,
-    test(&ncc, "\"besm Allah\" //asdasdasdas\n  \"AlRa7maan AlRa7eem\"");
+    //test(&ncc, "\"besm Allah\" //asdasdasdas\n  \"AlRa7maan AlRa7eem\"");
 
-    test(&ncc, "class MyFirstClass {\n"
+    test(&ncc, "class MyFirstClass;\n"
+               "class MyFirstClass;\n"
+               "class MyFirstClass {\n"
+               "    int a, b;\n"
+               "    float c;\n"
+               "};\n"
+               "class MyFirstClass {\n"
                "    int a;\n"
                "};");
 
