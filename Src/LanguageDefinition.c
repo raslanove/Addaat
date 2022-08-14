@@ -130,7 +130,6 @@ void defineLanguage(struct NCC* ncc) {
     NCC_addRule(pushingRuleData.set(&pushingRuleData,         "signed",         "signed"));
     NCC_addRule(pushingRuleData.set(&pushingRuleData,       "unsigned",       "unsigned"));
     NCC_addRule(pushingRuleData.set(&pushingRuleData,         "static",         "static"));
-    NCC_addRule(pushingRuleData.set(&pushingRuleData,         "inline",         "inline"));
 
     // Space markers (forward declaration),
     NCC_addRule(pushingRuleData.set(&pushingRuleData, "insert space", ""));
@@ -362,17 +361,13 @@ void defineLanguage(struct NCC* ncc) {
     NCC_addRule   (  plainRuleData.set(&  plainRuleData, "declaration-specifiers", "STUB!"));
     NCC_addRule   (  plainRuleData.set(&  plainRuleData, "init-declarator-list", "STUB!"));
     NCC_addRule   (pushingRuleData.set(&pushingRuleData, "declaration",
-                                       "{${declaration-specifiers} {${+ } ${init-declarator-list}}|${ε} ${} ${;} }"));
+                                       "${declaration-specifiers} {${+ } ${init-declarator-list}}|${ε} ${} ${;}"));
 
     // Declaration specifiers,
     NCC_addRule   (  plainRuleData.set(&  plainRuleData, "storage-class-specifier", "STUB!"));
     NCC_addRule   (  plainRuleData.set(&  plainRuleData, "type-specifier", "STUB!"));
-    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "function-specifier", "STUB!"));
     NCC_updateRule(pushingRuleData.set(&pushingRuleData, "declaration-specifiers",
-                                       "#{{storage-class-specifier} "
-                                       "           {type-specifier} "
-                                       "       {function-specifier}}"
-                                       "{${+ } ${declaration-specifiers}}|${ε}"));
+                                       "${storage-class-specifier}|${ε} ${+ } ${type-specifier}"));
 
     // Init declarator list,
     NCC_addRule   (  plainRuleData.set(&  plainRuleData, "init-declarator", "STUB!"));
@@ -410,31 +405,15 @@ void defineLanguage(struct NCC* ncc) {
                                        "${[} ${} ${]}"));
 
     // Class specifier,
-    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "class-declaration-list", "STUB!"));
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "declaration-list", "STUB!"));
     NCC_updateRule(pushingRuleData.set(&pushingRuleData, "class-specifier",
                                        "${class} ${+ }"
-                                       "{${identifier}|${ε} ${+ } ${OB} ${+\n} ${} ${class-declaration-list} ${} ${CB}} | "
+                                       "{${identifier}|${ε} ${+ } ${OB} ${+\n} ${} ${declaration-list} ${} ${CB}} | "
                                        " ${identifier}"));
 
-    // Class declaration list,
-    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "class-declaration", "STUB!"));
-    NCC_updateRule(  plainRuleData.set(&  plainRuleData, "class-declaration-list",
-                                       "${class-declaration} { "
-                                       "   ${} ${class-declaration}"
-                                       "}^*"));
-
-    // Class declaration,
-    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "declarator-list", "STUB!"));
-    NCC_updateRule(pushingRuleData.set(&pushingRuleData, "class-declaration",
-                                       "{${storage-class-specifier}|${ε} ${+ } ${type-specifier} ${+ } ${declarator-list}|${ε} ${} ${;} ${+\n}}"));
-
-    // Class declarator list,
-    // TODO: at some point, use init-declarator-list within classes. You'll have to keep track of \
-             initial values and perform them before the constructor...
-    NCC_updateRule(  plainRuleData.set(&  plainRuleData, "declarator-list",
-                                       "${declarator} { "
-                                       "   ${} ${,} ${+ } ${declarator}"
-                                       "}^*"));
+    // Declaration list,
+    NCC_updateRule(  plainRuleData.set(&  plainRuleData, "declaration-list",
+                                       "${declaration} ${+\n} ${declaration-list}|${ε}"));
 
     // Enum specifier,
     NCC_addRule   (  plainRuleData.set(&  plainRuleData, "enumerator-list", "STUB!"));
@@ -453,18 +432,11 @@ void defineLanguage(struct NCC* ncc) {
     NCC_updateRule(  plainRuleData.set(&  plainRuleData, "enumerator",
                                        "${enumeration-constant} { ${} = ${} ${constant-expression} }|${ε}"));
 
-    // Function specifier,
-    NCC_updateRule(  plainRuleData.set(&  plainRuleData, "function-specifier",
-                                       "#{{inline} {identifier} != {identifier}}"));
-
     // Declarator,
     NCC_addRule   (  plainRuleData.set(&  plainRuleData, "parameter-type-list", "STUB!"));
     NCC_addRule   (  plainRuleData.set(&  plainRuleData, "identifier-list", "STUB!"));
     NCC_updateRule(pushingRuleData.set(&pushingRuleData, "declarator",
-                                       "${identifier} {"
-                                       "   { ${} ${(} ${} ${parameter-type-list}  ${} ${)}} | "
-                                       "   { ${} ${(} ${} ${identifier-list}|${ε} ${} ${)}}"
-                                       "}^*"));
+                                       "${identifier} {${} ${(} ${} ${parameter-type-list} ${} ${)}}|${ε}"));
 
     // Parameter type list,
     NCC_addRule   (  plainRuleData.set(&  plainRuleData, "parameter-list", "STUB!"));
@@ -481,7 +453,11 @@ void defineLanguage(struct NCC* ncc) {
     // Parameter declaration,
     NCC_addRule   (pushingRuleData.set(&pushingRuleData, "abstract-declarator", "STUB!"));
     NCC_updateRule(pushingRuleData.set(&pushingRuleData, "parameter-declaration",
-                                       "${declaration-specifiers} ${} {${+ } ${declarator}}|${abstract-declarator}|${ε}"));
+                                       "${type-specifier} ${} {${+ } ${declarator}}|${abstract-declarator}|${ε}"));
+
+    // Abstract declarator,
+    NCC_updateRule(pushingRuleData.set(&pushingRuleData, "abstract-declarator",
+                                       "${(} ${} ${parameter-type-list}|${ε} ${} ${)}"));
 
     // Identifier list,
     NCC_updateRule(  plainRuleData.set(&  plainRuleData, "identifier-list",
@@ -492,16 +468,6 @@ void defineLanguage(struct NCC* ncc) {
     // Type name,
     NCC_updateRule(  plainRuleData.set(&  plainRuleData, "type-name",
                                        "${type-specifier} ${} ${abstract-declarator}|${ε}"));
-
-    // Abstract declarator,
-    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "abstract-declarator-content",
-                                       "{${(} ${} ${abstract-declarator} ${} ${)} } | "
-                                       "{${[} ${} ${assignment-expression}|${ε} ${} ${]} } | "
-                                       "{${(} ${} ${parameter-type-list}|${ε} ${} ${)} }"));
-    NCC_updateRule(  plainRuleData.set(&  plainRuleData, "abstract-declarator",
-                                       "${abstract-declarator-content} {"
-                                       "   ${} ${abstract-declarator-content}"
-                                       "}^*"));
 
     // Initializer,
     NCC_updateRule(  plainRuleData.set(&  plainRuleData, "initializer",
@@ -616,15 +582,8 @@ void defineLanguage(struct NCC* ncc) {
                                        "#{{function-definition} {declaration}}"));
 
     // Function definition,
-    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "declaration-list", "STUB!"));
     NCC_updateRule(pushingRuleData.set(&pushingRuleData, "function-definition",
-                                       "${declaration-specifiers} ${+ } ${declarator} ${} ${declaration-list}|${ε} ${+ } ${compound-statement} ${+\n}"));
-
-    // Declaration list,
-    NCC_updateRule(  plainRuleData.set(&  plainRuleData, "declaration-list",
-                                       "${declaration} {"
-                                       "   ${} ${declaration}"
-                                       "}^*"));
+                                       "${declaration-specifiers} ${+ } ${declarator} ${} ${+ } ${compound-statement} ${+\n}"));
 
     // Test document,
     NCC_addRule   (pushingRuleData.set(&pushingRuleData, "TestDocument",

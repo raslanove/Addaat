@@ -249,8 +249,14 @@ static boolean handleIgnorables(struct NCC_ASTNode* tree, struct CodeGenerationD
     return True;
 }
 
+// K&R function definition style. See: https://stackoverflow.com/a/18820829/1942069
+//int foo(a,b) int a, b; {
+//}
+
 static void generateCodeImplementation(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
     // Moved the implementation to a separate function to remove the codeGenerationData from the interface.
+
+    sizeof(void(int,int));
 
     const char* ruleNameCString = NString.get(&tree->name);
 
