@@ -63,14 +63,23 @@ void NMain() {
     // Test,
     //test(&ncc, "\"besm Allah\" //asdasdasdas\n  \"AlRa7maan AlRa7eem\"");
 
-    test(&ncc, "class MyFirstClass;\n"
-               "class MyFirstClass;\n"
-               "class MyFirstClass {\n"
-               "    int a, b;\n"
-               "    float c;\n"
-               "};\n"
-               "class MyFirstClass {\n"
-               "    int a;\n"
+    // test(&ncc, "class MyFirstClass;\n"   \
+               "class MyFirstClass;\n"   \
+               "class MyFirstClass {\n"  \
+               "    int a, b;\n"         \
+               "    float c;\n"          \
+               "};\n"                    \
+               "class MyFirstClass {\n"  \
+               "    int a;\n"            \
+               "};");
+
+               struct {
+                   int; int;
+               };
+
+    test(&ncc, "class MyFirstClass {\n"   \
+               "    static int[] a, b;\n" \
+               "    float c;\n"           \
                "};");
 
     // Clean up,

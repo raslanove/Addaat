@@ -131,7 +131,6 @@ void defineLanguage(struct NCC* ncc) {
     NCC_addRule(pushingRuleData.set(&pushingRuleData,       "unsigned",       "unsigned"));
     NCC_addRule(pushingRuleData.set(&pushingRuleData,         "static",         "static"));
     NCC_addRule(pushingRuleData.set(&pushingRuleData,         "inline",         "inline"));
-    NCC_addRule(pushingRuleData.set(&pushingRuleData,           "auto",           "auto"));
 
     // Space markers (forward declaration),
     NCC_addRule(pushingRuleData.set(&pushingRuleData, "insert space", ""));
@@ -369,12 +368,10 @@ void defineLanguage(struct NCC* ncc) {
     NCC_addRule   (  plainRuleData.set(&  plainRuleData, "storage-class-specifier", "STUB!"));
     NCC_addRule   (  plainRuleData.set(&  plainRuleData, "type-specifier", "STUB!"));
     NCC_addRule   (  plainRuleData.set(&  plainRuleData, "function-specifier", "STUB!"));
-    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "alignment-specifier", "STUB!"));
     NCC_updateRule(pushingRuleData.set(&pushingRuleData, "declaration-specifiers",
                                        "#{{storage-class-specifier} "
                                        "           {type-specifier} "
-                                       "       {function-specifier} "
-                                       "      {alignment-specifier}}"
+                                       "       {function-specifier}}"
                                        "{${+ } ${declaration-specifiers}}|${ε}"));
 
     // Init declarator list,
@@ -392,21 +389,25 @@ void defineLanguage(struct NCC* ncc) {
 
     // Storage class specifier,
     NCC_updateRule(pushingRuleData.set(&pushingRuleData, "storage-class-specifier",
-                                       "#{{static} {auto} {identifier} != {identifier}}"));
+                                       "#{{static} {identifier} != {identifier}}"));
 
     // Type specifier,
-    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "atomic-type-specifier", "STUB!"));
     NCC_addRule   (  plainRuleData.set(&  plainRuleData, "class-specifier", "STUB!"));
     NCC_addRule   (  plainRuleData.set(&  plainRuleData, "enum-specifier", "STUB!"));
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "array-specifier", "STUB!"));
+    // TODO: remove class and enum specifiers from types, make space for them as typedef like types ...
     NCC_updateRule(pushingRuleData.set(&pushingRuleData, "type-specifier",
                                        "#{{void}     {char}            "
                                        "  {short}    {int}      {long} "
                                        "  {float}    {double}          "
-                                       "  {signed}   {unsigned}        "
-                                       "  {atomic-type-specifier}      "
-                                       "  {class-specifier}  "
+                                       "  {class-specifier}            "
                                        "  {enum-specifier}             "
-                                       "  {identifier} != {identifier}}"));
+                                       "  {identifier} != {identifier}}"
+                                       "{${} ${array-specifier}}|${ε}"));
+
+    // Array specifier,
+    NCC_updateRule(pushingRuleData.set(&pushingRuleData, "array-specifier",
+                                       "${[} ${} ${]}"));
 
     // Class specifier,
     NCC_addRule   (  plainRuleData.set(&  plainRuleData, "class-declaration-list", "STUB!"));
@@ -423,15 +424,9 @@ void defineLanguage(struct NCC* ncc) {
                                        "}^*"));
 
     // Class declaration,
-    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "specifier-list", "STUB!"));
     NCC_addRule   (  plainRuleData.set(&  plainRuleData, "declarator-list", "STUB!"));
     NCC_updateRule(pushingRuleData.set(&pushingRuleData, "class-declaration",
-                                       "{${specifier-list} ${+ } ${declarator-list}|${ε} ${} ${;} ${+\n}}"));
-
-    // Specifier list,
-    NCC_updateRule(  plainRuleData.set(&  plainRuleData, "specifier-list",
-                                       "${type-specifier} "
-                                       "{${+ } ${type-specifier}}^*"));
+                                       "{${storage-class-specifier}|${ε} ${+ } ${type-specifier} ${+ } ${declarator-list}|${ε} ${} ${;} ${+\n}}"));
 
     // Class declarator list,
     // TODO: at some point, use init-declarator-list within classes. You'll have to keep track of \
@@ -462,16 +457,11 @@ void defineLanguage(struct NCC* ncc) {
     NCC_updateRule(  plainRuleData.set(&  plainRuleData, "function-specifier",
                                        "#{{inline} {identifier} != {identifier}}"));
 
-    // Alignment specifier,
-    NCC_updateRule(  plainRuleData.set(&  plainRuleData, "alignment-specifier",
-                                       "${} ${(} ${} ${type-name}|${constant-expression} ${} ${)}"));
-
     // Declarator,
     NCC_addRule   (  plainRuleData.set(&  plainRuleData, "parameter-type-list", "STUB!"));
     NCC_addRule   (  plainRuleData.set(&  plainRuleData, "identifier-list", "STUB!"));
     NCC_updateRule(pushingRuleData.set(&pushingRuleData, "declarator",
-                                       "{${identifier} | {(${} ${declarator} ${})}} {"
-                                       "   { ${} ${[} ${} ${assignment-expression}|${ε} ${} ${]}} | "
+                                       "${identifier} {"
                                        "   { ${} ${(} ${} ${parameter-type-list}  ${} ${)}} | "
                                        "   { ${} ${(} ${} ${identifier-list}|${ε} ${} ${)}}"
                                        "}^*"));
@@ -501,7 +491,7 @@ void defineLanguage(struct NCC* ncc) {
 
     // Type name,
     NCC_updateRule(  plainRuleData.set(&  plainRuleData, "type-name",
-                                       "${specifier-list} ${} ${abstract-declarator}|${ε}"));
+                                       "${type-specifier} ${} ${abstract-declarator}|${ε}"));
 
     // Abstract declarator,
     NCC_addRule   (  plainRuleData.set(&  plainRuleData, "abstract-declarator-content",

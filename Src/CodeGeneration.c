@@ -264,7 +264,6 @@ static void generateCodeImplementation(struct NCC_ASTNode* tree, struct CodeGene
         codeAppend(codeGenerationData, "}");
     } else if (NCString.equals(ruleNameCString, "class-specifier")) {
         parseClassSpecifier(tree, codeGenerationData);
-        proceedToChildren = True; // TODO: remove...
     } else {
         if (NVector.size(&tree->childNodes)) {
             proceedToChildren = True;
