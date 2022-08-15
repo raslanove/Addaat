@@ -10,6 +10,7 @@
 // TODO: perform address translation based on a flag...
 // TODO: fix arrays are not primitive types...
 // TODO: remove the need to write "class" before declaring a class...
+// TODO: replace function pointers with interfaces...
 
 #include <CodeGeneration.h>
 
@@ -218,7 +219,7 @@ static void parseClassSpecifier(struct NCC_ASTNode* tree, struct CodeGenerationD
         }
         class->defined = True;
 
-        // Parse class declarations,
+        // Parse declarations,
         // TODO: ...
 
     }
