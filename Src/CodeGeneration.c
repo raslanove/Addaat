@@ -152,7 +152,7 @@ static struct ClassInfo* getClass(struct CodeGenerationData* codeGenerationData,
     return 0;
 }
 
-static void parseClassSpecifier(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
+static void parseClassDeclaration(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
 
     // class-specifier:
     // │class MyFirstClass {
@@ -222,6 +222,9 @@ static void parseClassSpecifier(struct NCC_ASTNode* tree, struct CodeGenerationD
         // Parse declarations,
         // TODO: ...
 
+        // ${storage-class-specifier}|${ε} ${+ } ${type-specifier}
+        // ${declarator} {${+ } ${=} ${+ } ${initializer}}|${ε}
+
     }
 }
 
@@ -269,8 +272,8 @@ static void generateCodeImplementation(struct NCC_ASTNode* tree, struct CodeGene
     } else if (NCString.equals(ruleNameCString, "CB")) {
         codeGenerationData->indentationCount--;
         codeAppend(codeGenerationData, "}");
-    } else if (NCString.equals(ruleNameCString, "class-specifier")) {
-        parseClassSpecifier(tree, codeGenerationData);
+    } else if (NCString.equals(ruleNameCString, "class-declaration")) {
+        parseClassDeclaration(tree, codeGenerationData);
     } else {
         if (NVector.size(&tree->childNodes)) {
             proceedToChildren = True;

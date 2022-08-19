@@ -73,14 +73,11 @@ void NMain() {
                "    int a;\n"            \
                "};");
 
-               struct {
-                   int; int;
-               };
-
     test(&ncc, "class MyFirstClass {\n"   \
                "    static int[] a, b;\n" \
-               "    float c;\n"           \
-               "};");
+               "    static int[][] c = {{12}, {24}};\n" \
+               "    float d;\n"           \
+               "}");
 
     // Clean up,
     NCC_destroyNCC(&ncc);
