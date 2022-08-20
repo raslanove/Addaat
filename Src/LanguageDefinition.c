@@ -229,12 +229,8 @@ void defineLanguage(struct NCC* ncc) {
     // Postfix expression,
     NCC_addRule   (  plainRuleData.set(&plainRuleData, "type-name", "STUB!"));
     NCC_addRule   (  plainRuleData.set(&  plainRuleData, "argument-expression-list", "STUB!"));
-    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "initializer-list", "STUB!"));
-    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "postfix-expression-contents",
-                                       "${primary-expression} | "
-                                       "{ ${(} ${} ${type-name} ${} ${)} ${} ${OB} ${} ${initializer-list} ${} {${,} ${+ }}|${ε} ${} ${CB} }"));
     NCC_addRule   (pushingRuleData.set(&pushingRuleData, "postfix-expression",
-                                       "${postfix-expression-contents} {"
+                                       "${primary-expression} {"
                                        "   {${} ${[}  ${} ${expression} ${} ${]} } | "
                                        "   {${} ${(}  ${} ${argument-expression-list}|${ε} ${} ${)} } | "
                                        "   {${} ${.}  ${} ${identifier}} | "
@@ -356,27 +352,21 @@ void defineLanguage(struct NCC* ncc) {
 
     // Declaration,
     NCC_addRule   (  plainRuleData.set(&  plainRuleData, "declaration-specifiers", "STUB!"));
-    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "init-declarator-list", "STUB!"));
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "identifier-list", "STUB!"));
     NCC_addRule   (pushingRuleData.set(&pushingRuleData, "declaration",
-                                       "${declaration-specifiers} {${+ } ${init-declarator-list}}|${ε} ${} ${;}"));
+                                       "${declaration-specifiers} ${+ } ${identifier-list} ${} ${;}"));
+
+    // Identifier list,
+    NCC_updateRule(  plainRuleData.set(&  plainRuleData, "identifier-list",
+                                       "${identifier} {"
+                                       "   ${} ${,} ${+ } ${identifier}"
+                                       "}^*"));
 
     // Declaration specifiers,
     NCC_addRule   (  plainRuleData.set(&  plainRuleData, "storage-class-specifier", "STUB!"));
     NCC_addRule   (  plainRuleData.set(&  plainRuleData, "type-specifier", "STUB!"));
     NCC_updateRule(  plainRuleData.set(&  plainRuleData, "declaration-specifiers",
                                        "${storage-class-specifier}|${ε} ${+ } ${type-specifier}"));
-
-    // Init declarator list,
-    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "init-declarator", "STUB!"));
-    NCC_updateRule(pushingRuleData.set(&pushingRuleData, "init-declarator-list",
-                                       "${init-declarator} { "
-                                       "   ${} ${,} ${+ } ${init-declarator}"
-                                       "}^*"));
-
-    // Init declarator,
-    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "initializer", "STUB!"));
-    NCC_updateRule(pushingRuleData.set(&pushingRuleData, "init-declarator",
-                                       "${identifier} {${+ } ${=} ${+ } ${initializer}}|${ε}"));
 
     // Storage class specifier,
     NCC_updateRule(  plainRuleData.set(&  plainRuleData, "storage-class-specifier",
@@ -431,17 +421,6 @@ void defineLanguage(struct NCC* ncc) {
     // Enumerator,
     NCC_updateRule(  plainRuleData.set(&  plainRuleData, "enumerator",
                                        "${enumeration-constant} { ${} = ${} ${constant-expression} }|${ε}"));
-
-    // Initializer,
-    NCC_updateRule(  plainRuleData.set(&  plainRuleData, "initializer",
-                                       "${assignment-expression} | "
-                                       "{ ${OB} ${} ${initializer-list} ${} ${,}|${ε} ${} ${CB} }"));
-
-    // Initializer list,
-    NCC_updateRule(  plainRuleData.set(&  plainRuleData, "initializer-list",
-                                       "${initializer} {"
-                                       "   ${} ${,} ${} ${initializer}"
-                                       "}^*"));
 
     // -------------------------------------
     // Statements,

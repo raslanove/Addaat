@@ -76,7 +76,7 @@ void NMain() {
 
     test(&ncc, "class MyFirstClass {\n"   \
                "    static int[] a, b;\n" \
-               "    static int[][] c = {{12}, {24}};\n" \
+               "    static int[][] c;\n" \
                "    float d;\n"           \
                "}");
 
