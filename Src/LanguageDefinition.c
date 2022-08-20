@@ -363,7 +363,7 @@ void defineLanguage(struct NCC* ncc) {
     // Declaration specifiers,
     NCC_addRule   (  plainRuleData.set(&  plainRuleData, "storage-class-specifier", "STUB!"));
     NCC_addRule   (  plainRuleData.set(&  plainRuleData, "type-specifier", "STUB!"));
-    NCC_updateRule(pushingRuleData.set(&pushingRuleData, "declaration-specifiers",
+    NCC_updateRule(  plainRuleData.set(&  plainRuleData, "declaration-specifiers",
                                        "${storage-class-specifier}|${ε} ${+ } ${type-specifier}"));
 
     // Init declarator list,
@@ -379,7 +379,7 @@ void defineLanguage(struct NCC* ncc) {
                                        "${identifier} {${+ } ${=} ${+ } ${initializer}}|${ε}"));
 
     // Storage class specifier,
-    NCC_updateRule(pushingRuleData.set(&pushingRuleData, "storage-class-specifier",
+    NCC_updateRule(  plainRuleData.set(&  plainRuleData, "storage-class-specifier",
                                        "#{{static} {identifier} != {identifier}}"));
 
     // Type specifier,

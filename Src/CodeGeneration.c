@@ -142,11 +142,116 @@ static void codeAppend(struct CodeGenerationData* codeGenerationData, const char
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Class
+// Parsing
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #define SkipIngorables \
     while (handleIgnorables(*((struct NCC_ASTNode**) NVector.get(&tree->childNodes, currentChildIndex)), codeGenerationData)) currentChildIndex++;
+
+#define Begin \
+    int32_t currentChildIndex = 0; \
+    SkipIngorables \
+    struct NCC_ASTNode* currentChild = *((struct NCC_ASTNode**) NVector.get(&tree->childNodes, currentChildIndex));
+
+#define NextChild \
+    currentChildIndex++; \
+    SkipIngorables \
+    currentChild = *((struct NCC_ASTNode**) NVector.get(&tree->childNodes, currentChildIndex));
+
+#define Equals(text) \
+    NCString.equals(NString.get(&currentChild->name), text)
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Variable
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// TODO: pass vector...
+static void parseVariableDeclaration(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
+
+    // declaration: static int[][] c = {{12}, {24}};
+    // ├─static: static
+    // ├─insert space:
+    // ├─type-specifier: int[][]
+    // │ ├─int: int
+    // │ ├─array-specifier: []
+    // │ │ ├─[: [
+    // │ │ └─]: ]
+    // │ │
+    // │ └─array-specifier: []
+    // │   ├─[: [
+    // │   └─]: ]
+    // │
+    // ├─insert space:
+    // ├─init-declarator-list: c = {{12}, {24}}
+    // │ └─init-declarator: c = {{12}, {24}}
+    // │   ├─identifier: c
+    // │   ├─insert space:
+    // │   ├─=: =
+    // │   ├─insert space:
+    // │   ├─OB: {
+    // │   ├─OB: {
+    // │   ├─assignment-expression: 12
+    // │   │ └─conditional-expression: 12
+    // │   │   └─logical-or-expression: 12
+    // │   │     └─logical-and-expression: 12
+    // │   │       └─or-expression: 12
+    // │   │         └─xor-expression: 12
+    // │   │           └─and-expression: 12
+    // │   │             └─equality-expression: 12
+    // │   │               └─relational-expression: 12
+    // │   │                 └─shift-expression: 12
+    // │   │                   └─additive-expression: 12
+    // │   │                     └─multiplicative-expression: 12
+    // │   │                       └─cast-expression: 12
+    // │   │                         └─unary-expression: 12
+    // │   │                           └─postfix-expression: 12
+    // │   │                             └─primary-expression: 12
+    // │   │                               └─constant: 12
+    // │   │                                 └─integer-constant: 12
+    // │   │
+    // │   ├─CB: }
+    // │   ├─,: ,
+    // │   ├─OB: {
+    // │   ├─assignment-expression: 24
+    // │   │ └─conditional-expression: 24
+    // │   │   └─logical-or-expression: 24
+    // │   │     └─logical-and-expression: 24
+    // │   │       └─or-expression: 24
+    // │   │         └─xor-expression: 24
+    // │   │           └─and-expression: 24
+    // │   │             └─equality-expression: 24
+    // │   │               └─relational-expression: 24
+    // │   │                 └─shift-expression: 24
+    // │   │                   └─additive-expression: 24
+    // │   │                     └─multiplicative-expression: 24
+    // │   │                       └─cast-expression: 24
+    // │   │                         └─unary-expression: 24
+    // │   │                           └─postfix-expression: 24
+    // │   │                             └─primary-expression: 24
+    // │   │                               └─constant: 24
+    // │   │                                 └─integer-constant: 24
+    // │   │
+    // │   ├─CB: }
+    // │   └─CB: }
+    // │
+    // └─;: ;
+
+    // ${declaration-specifiers} {${+ } ${init-declarator-list}}|${ε} ${} ${;}
+
+    // TODO: create variable...
+
+    Begin
+
+    if (Equals("static")) {
+        // ...xxx
+    }
+
+
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Class
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 static struct ClassInfo* createClass(struct CodeGenerationData* codeGenerationData, const char* className) {
     struct ClassInfo* newClass = NMALLOC(sizeof(struct ClassInfo), "CodeGeneration.createClass() newClass");
@@ -168,28 +273,24 @@ static struct ClassInfo* getClass(struct CodeGenerationData* codeGenerationData,
 
 static void parseClassDeclaration(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
 
-    int32_t childrenCount = NVector.size(&tree->childNodes);
-    int32_t currentChildIndex = 0;
-    struct NCC_ASTNode* currentChild;
+    // ${class} ${+ } ${identifier}
+    //   {${} ${;} ${+\n}} |
+    //   {${+ } ${OB} ${+\n} ${declaration-list} ${} ${CB} ${+\n}}
+
+    Begin
 
     // Skip the "class" keyword,
     codeAppend(codeGenerationData, "struct");
-    currentChildIndex++;
-    SkipIngorables
+    NextChild
 
-    // Parse class name,
-    currentChild = *((struct NCC_ASTNode**) NVector.get(&tree->childNodes, currentChildIndex));
-
-    // Find existing. If not, create new,
+    // Parse class name, if not and existing one, create new,
     const char* className = NString.get(&currentChild->value);
     struct ClassInfo* class = getClass(codeGenerationData, className);
     if (!class) class = createClass(codeGenerationData, className);
-    currentChildIndex++;
-    SkipIngorables
+    NextChild
 
     // Return if semi-colon found (forward-declaration),
-    currentChild = *((struct NCC_ASTNode**) NVector.get(&tree->childNodes, currentChildIndex));
-    if (NCString.equals(NString.get(&currentChild->name), ";")) return;
+    if (Equals(";")) return;
 
     // Skip open bracket,
     if (class->defined) {
@@ -197,16 +298,17 @@ static void parseClassDeclaration(struct NCC_ASTNode* tree, struct CodeGeneratio
         return ;
     }
     class->defined = True;
-    currentChildIndex++;
-    SkipIngorables
 
     // Parse declarations,
+    /*while (True)*/ {
+        // Check if closing bracket reached,
+        NextChild
+        if (Equals("CB")) return;
 
-    // Check if closing bracket reached,
-    currentChild = *((struct NCC_ASTNode**) NVector.get(&tree->childNodes, currentChildIndex));
-    if (NCString.equals(NString.get(&currentChild->name), "CB")) return;
-
-    //...xxx
+        // Parse variable declaration,
+        parseVariableDeclaration(currentChild, codeGenerationData);
+        //...xxx
+    }
 
     //"${declaration} ${+\n} ${declaration-list}|${ε}"));
 
