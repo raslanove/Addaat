@@ -26,12 +26,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 struct ClassInfo {
-    struct NString className;
+    struct NString name;
+    struct NVector members; // struct VariableInfo*.
     boolean defined;
-    int32_t sizeBytes;
 };
 
-struct Variable {
+struct VariableInfo {
     struct NString name;
     int32_t type;
     int32_t classIndex;
@@ -63,8 +63,7 @@ struct CodeGenerationData {
     int32_t indentationCount;
 
     // Symbols,
-    struct NVector classes; // struct ClassInfo
-    int32_t anonymousClassesCount;
+    struct NVector classes; // struct ClassInfo*
 };
 
 static void initializeCodeGenerationData(struct CodeGenerationData* codeGenerationData) {
@@ -80,8 +79,21 @@ static void initializeCodeGenerationData(struct CodeGenerationData* codeGenerati
     codeGenerationData->indentationCount = 0;
 
     // Symbols,
-    NVector.initialize(&codeGenerationData->classes, 0, sizeof(struct ClassInfo));
-    codeGenerationData->anonymousClassesCount = 0;
+    NVector.initialize(&codeGenerationData->classes, 0, sizeof(struct ClassInfo*));
+}
+
+static void destroyAndDeleteVariableInfo(struct VariableInfo* variableInfo) {
+    NString.destroy(&variableInfo->name);
+    NFREE(variableInfo, "CodeGeneration.destroyAndDeleteVariableInfo() variableInfo");
+}
+
+static void destroyAndDeleteClassInfo(struct ClassInfo* classInfo) {
+    NString.destroy(&classInfo->name);
+    for (int32_t i=NVector.size(&classInfo->members)-1; i>=0; i--) {
+        destroyAndDeleteVariableInfo(*(struct VariableInfo **) NVector.getLast(&classInfo->members));
+    }
+    NVector.destroy(&classInfo->members);
+    NFREE(classInfo, "CodeGeneration.destroyAndDeleteClassInfo() classInfo");
 }
 
 static void destroyCodeGenerationData(struct CodeGenerationData* codeGenerationData) {
@@ -90,8 +102,7 @@ static void destroyCodeGenerationData(struct CodeGenerationData* codeGenerationD
 
     // Classes,
     for (int32_t i=NVector.size(&codeGenerationData->classes)-1; i>=0; i--) {
-        struct ClassInfo* classInfo = NVector.getLast(&codeGenerationData->classes);
-        NString.destroy(&classInfo->className);
+        destroyAndDeleteClassInfo(*(struct ClassInfo**) NVector.getLast(&codeGenerationData->classes));
     }
     NVector.destroy(&codeGenerationData->classes);
 }
@@ -138,16 +149,19 @@ static void codeAppend(struct CodeGenerationData* codeGenerationData, const char
     while (handleIgnorables(*((struct NCC_ASTNode**) NVector.get(&tree->childNodes, currentChildIndex)), codeGenerationData)) currentChildIndex++;
 
 static struct ClassInfo* createClass(struct CodeGenerationData* codeGenerationData, const char* className) {
-    struct ClassInfo* newClass = NVector.emplaceBack(&codeGenerationData->classes);
-    NString.initialize(&newClass->className, "%s", className);
+    struct ClassInfo* newClass = NMALLOC(sizeof(struct ClassInfo), "CodeGeneration.createClass() newClass");
+    NString.initialize(&newClass->name, "%s", className);
+    NVector.initialize(&newClass->members, 0, sizeof(struct VariableInfo*));
     newClass->defined = False;
+
+    NVector.pushBack(&codeGenerationData->classes, &newClass);
     return newClass;
 }
 
 static struct ClassInfo* getClass(struct CodeGenerationData* codeGenerationData, const char* className) {
     for (int32_t i=NVector.size(&codeGenerationData->classes)-1; i>=0; i--) {
-        struct ClassInfo* classInfo = NVector.getLast(&codeGenerationData->classes);
-        if (NCString.equals(className, NString.get(&classInfo->className))) return classInfo;
+        struct ClassInfo* classInfo = *(struct ClassInfo**) NVector.getLast(&codeGenerationData->classes);
+        if (NCString.equals(className, NString.get(&classInfo->name))) return classInfo;
     }
     return 0;
 }
@@ -177,7 +191,7 @@ static void parseClassDeclaration(struct NCC_ASTNode* tree, struct CodeGeneratio
     currentChild = *((struct NCC_ASTNode**) NVector.get(&tree->childNodes, currentChildIndex));
     if (NCString.equals(NString.get(&currentChild->name), ";")) return;
 
-    // Parse open bracket,
+    // Skip open bracket,
     if (class->defined) {
         NERROR("parseClassSpecifier()", "Class redefinition.");
         return ;
@@ -187,7 +201,14 @@ static void parseClassDeclaration(struct NCC_ASTNode* tree, struct CodeGeneratio
     SkipIngorables
 
     // Parse declarations,
-    // TODO: ...
+
+    // Check if closing bracket reached,
+    currentChild = *((struct NCC_ASTNode**) NVector.get(&tree->childNodes, currentChildIndex));
+    if (NCString.equals(NString.get(&currentChild->name), "CB")) return;
+
+    //...xxx
+
+    //"${declaration} ${+\n} ${declaration-list}|${ε}"));
 
     // ${declaration-list} ${} ${CB} ${+\n}
 }
