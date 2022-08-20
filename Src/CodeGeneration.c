@@ -154,32 +154,6 @@ static struct ClassInfo* getClass(struct CodeGenerationData* codeGenerationData,
 
 static void parseClassDeclaration(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
 
-    // class-specifier:
-    // │class MyFirstClass {
-    // │    int a;
-    // │}
-    // │
-    // ├─class: class
-    // ├─insert space:
-    // ├─identifier: MyFirstClass
-    // ├─insert space:
-    // ├─OB: {
-    // ├─insert \n:
-    // ├─class-declaration:
-    // │ │int a;
-    // │ │
-    // │ ├─type-specifier: int
-    // │ │ └─int: int
-    // │ │
-    // │ ├─insert space:
-    // │ ├─declarator: a
-    // │ │ └─identifier: a
-    // │ │
-    // │ ├─;: ;
-    // │ └─insert \n:
-    // │
-    // └─CB: }
-
     int32_t childrenCount = NVector.size(&tree->childNodes);
     int32_t currentChildIndex = 0;
     struct NCC_ASTNode* currentChild;
@@ -191,41 +165,31 @@ static void parseClassDeclaration(struct NCC_ASTNode* tree, struct CodeGeneratio
 
     // Parse class name,
     currentChild = *((struct NCC_ASTNode**) NVector.get(&tree->childNodes, currentChildIndex));
-    struct ClassInfo* class;
-    if (NCString.equals(NString.get(&currentChild->name), "identifier")) {
 
-        // Find existing. If not, create new,
-        const char* className = NString.get(&currentChild->value);
-        class = getClass(codeGenerationData, className);
-        if (!class) class = createClass(codeGenerationData, className);
-        currentChildIndex++;
-        if (currentChildIndex==childrenCount) return ;
-        SkipIngorables
-    } else {
+    // Find existing. If not, create new,
+    const char* className = NString.get(&currentChild->value);
+    struct ClassInfo* class = getClass(codeGenerationData, className);
+    if (!class) class = createClass(codeGenerationData, className);
+    currentChildIndex++;
+    SkipIngorables
 
-        // Create anonymous,
-        struct NString className;
-        NString.initialize(&className, "__N_AnonymousClass_%d", codeGenerationData->anonymousClassesCount++);
-        class = createClass(codeGenerationData, NString.get(&className));
-        NString.destroy(&className);
-    }
+    // Return if semi-colon found (forward-declaration),
+    currentChild = *((struct NCC_ASTNode**) NVector.get(&tree->childNodes, currentChildIndex));
+    if (NCString.equals(NString.get(&currentChild->name), ";")) return;
 
     // Parse open bracket,
-    currentChild = *((struct NCC_ASTNode**) NVector.get(&tree->childNodes, currentChildIndex));
-    if (NCString.equals(NString.get(&currentChild->name), "OB")) {
-        if (class->defined) {
-            NERROR("parseClassSpecifier()", "Class redefinition.");
-            return ;
-        }
-        class->defined = True;
-
-        // Parse declarations,
-        // TODO: ...
-
-        // ${storage-class-specifier}|${ε} ${+ } ${type-specifier}
-        // ${declarator} {${+ } ${=} ${+ } ${initializer}}|${ε}
-
+    if (class->defined) {
+        NERROR("parseClassSpecifier()", "Class redefinition.");
+        return ;
     }
+    class->defined = True;
+    currentChildIndex++;
+    SkipIngorables
+
+    // Parse declarations,
+    // TODO: ...
+
+    // ${declaration-list} ${} ${CB} ${+\n}
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -259,8 +223,6 @@ static boolean handleIgnorables(struct NCC_ASTNode* tree, struct CodeGenerationD
 
 static void generateCodeImplementation(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
     // Moved the implementation to a separate function to remove the codeGenerationData from the interface.
-
-    sizeof(void(int,int));
 
     const char* ruleNameCString = NString.get(&tree->name);
 

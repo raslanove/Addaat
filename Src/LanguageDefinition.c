@@ -407,7 +407,9 @@ void defineLanguage(struct NCC* ncc) {
     // Class declaration,
     NCC_addRule   (  plainRuleData.set(&  plainRuleData, "declaration-list", "STUB!"));
     NCC_addRule   (pushingRuleData.set(&pushingRuleData, "class-declaration",
-                                       "${class} ${+ } ${identifier} ${+ } ${OB} ${+\n} ${declaration-list} ${} ${CB} ${+\n}"));
+                                       "${class} ${+ } ${identifier} "
+                                       "{${} ${;} ${+\n}} |"
+                                       "{${+ } ${OB} ${+\n} ${declaration-list} ${} ${CB} ${+\n}}"));
 
     // Declaration list,
     NCC_updateRule(  plainRuleData.set(&  plainRuleData, "declaration-list",
