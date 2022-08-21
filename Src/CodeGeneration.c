@@ -516,6 +516,8 @@ static void generateCodeImplementation(struct NCC_ASTNode* tree, struct CodeGene
 
 void generateCode(struct NCC_ASTNode* tree, struct NString* outString) {
 
+    // TODO: Update class-specifier rule to set a new listener ?
+
     struct CodeGenerationData codeGenerationData;
     initializeCodeGenerationData(&codeGenerationData);
     generateCodeImplementation(tree, &codeGenerationData);

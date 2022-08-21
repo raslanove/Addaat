@@ -164,7 +164,8 @@ void defineLanguage(struct NCC* ncc) {
 
     // Identifier,
     NCC_addRule(  plainRuleData.set(&  plainRuleData, "identifier-non-digit", "${non-digit} | ${universal-character-name}"));
-    NCC_addRule(pushingRuleData.set(&pushingRuleData, "identifier", "${identifier-non-digit} {${digit} | ${identifier-non-digit}}^*"));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData, "identifier-content", "${identifier-non-digit} {${digit} | ${identifier-non-digit}}^*"));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData, "identifier", "#{{class} {enum} {if} {else} {while} {do} {for} {continue} {break} {return} {switch} {case} {default} {goto} {void} {char} {short} {int} {long} {float} {double} {signed} {unsigned} {static} {identifier-content} == {identifier-content}}"));
 
     // Constants,
     // Integer constant,
