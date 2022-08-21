@@ -184,6 +184,14 @@ static void destroyAndDeleteVariableInfo(struct VariableInfo* variableInfo) {
     NFREE(variableInfo, "CodeGeneration.destroyAndDeleteVariableInfo() variableInfo");
 }
 
+static struct VariableInfo* getVariable(struct NVector* variables, const char* variableName) {
+    for (int32_t i=NVector.size(variables)-1; i>=0; i--) {
+        struct VariableInfo* variableInfo = *(struct VariableInfo**) NVector.get(variables, i);
+        if (NCString.equals(variableName, NString.get(&variableInfo->name))) return variableInfo;
+    }
+    return 0;
+}
+
 static struct VariableType* parseTypeSpecifier(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
 
     // type-specifier: int[][]
@@ -235,9 +243,9 @@ static struct VariableType* parseTypeSpecifier(struct NCC_ASTNode* tree, struct 
     return variableType;
 }
 
-static struct VariableInfo* parseVariableDeclaration(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
+static boolean parseVariableDeclaration(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData, struct NVector* outputVector) {
 
-    // declaration: static int[][] c;
+    // declaration: static int[][] c, d;
     // ├─static: static
     // ├─insert space:
     // ├─type-specifier: int[][]
@@ -252,6 +260,9 @@ static struct VariableInfo* parseVariableDeclaration(struct NCC_ASTNode* tree, s
     // │
     // ├─insert space:
     // ├─identifier: c
+    // ├─,: ,
+    // ├─insert space:
+    // ├─identifier: d
     // └─;: ;
 
     // ${declaration-specifiers} ${+ } ${identifier-list} ${} ${;}
@@ -273,7 +284,7 @@ static struct VariableInfo* parseVariableDeclaration(struct NCC_ASTNode* tree, s
     struct VariableType* variableType = parseTypeSpecifier(currentChild, codeGenerationData);
     if (!variableType) {
         NFREE(newVariable, "CodeGeneration.parseVariableDeclaration() newVariable 1");
-        return 0;
+        return False;
     }
 
     // Check for voids,
@@ -281,22 +292,43 @@ static struct VariableInfo* parseVariableDeclaration(struct NCC_ASTNode* tree, s
         NERROR("parseVariableDeclaration()", "Void is not a valid variable type.");
         NFREE( newVariable, "CodeGeneration.parseVariableDeclaration() newVariable 2");
         NFREE(variableType, "CodeGeneration.parseVariableDeclaration() variableType 1");
-        return 0;
+        return False;
     }
 
     // Assign type,
     newVariable->type = *variableType;
     NFREE(variableType, "CodeGeneration.parseVariableDeclaration() variableType 2");
 
-    // Parse name,
+    // Parse name and make sure it's not a redefinition,
     NextChild
+    if (getVariable(outputVector, VALUE)) {
+        NERROR("parseVariableDeclaration()", "Variable redefinition: %s%s%s.", NTCOLOR(HIGHLIGHT), VALUE, NTCOLOR(STREAM_DEFAULT));
+        NFREE( newVariable, "CodeGeneration.parseVariableDeclaration() newVariable 3");
+        return False;
+    }
     NString.initialize(&newVariable->name, "%s", VALUE);
+    NVector.pushBack(outputVector, &newVariable);
 
-    // TODO: continue parsing, there could be more variables....
-    // TODO: pass vector instead?
+    // Look for additional variables,
+    NextChild
+    while (Equals(",")) {
 
+        // Parse name and make sure it's not a redefinition,
+        NextChild
+        if (getVariable(outputVector, VALUE)) {
+            NERROR("parseVariableDeclaration()", "Variable redefinition: %s%s%s.", NTCOLOR(HIGHLIGHT), VALUE, NTCOLOR(STREAM_DEFAULT));
+            return False;
+        }
 
-    return newVariable;
+        // Create a new variable that's a copy of the first one but with a different name,
+        struct VariableInfo* anotherNewVariable = NMALLOC(sizeof(struct VariableInfo), "CodeGeneration.parseVariableDeclaration() anotherNewVariable");
+        *anotherNewVariable = *newVariable;
+        NString.initialize(&anotherNewVariable->name, "%s", VALUE);
+        NVector.pushBack(outputVector, &anotherNewVariable);
+        NextChild
+    }
+
+    return True;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -364,13 +396,7 @@ static void parseClassDeclaration(struct NCC_ASTNode* tree, struct CodeGeneratio
         if (Equals("CB")) return;
 
         // Parse variable declaration,
-        struct VariableInfo* newMember = parseVariableDeclaration(currentChild, codeGenerationData);
-        if (!newMember) return;
-
-        // TODO: check if variable declared before,
-        // ....xxx
-
-        NVector.pushBack(&class->members, &newMember);
+        if (!parseVariableDeclaration(currentChild, codeGenerationData, &class->members)) return;
     }
 }
 

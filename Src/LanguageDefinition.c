@@ -59,6 +59,8 @@ void defineLanguage(struct NCC* ncc) {
     // Lexical rules,
     // =====================================
 
+    // TODO: add boolean, True and False...
+
     // Tokens,
     NCC_addRule(pushingRuleData.set(&pushingRuleData,              "+",              "+"));
     NCC_addRule(pushingRuleData.set(&pushingRuleData,              "-",            "\\-"));
