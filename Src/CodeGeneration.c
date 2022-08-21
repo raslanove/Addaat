@@ -31,10 +31,26 @@ struct ClassInfo {
     boolean defined;
 };
 
-struct VariableInfo {
-    struct NString name;
+#define TYPE_VOID    0
+#define TYPE_CLASS   1
+#define TYPE_ENUM    2
+#define TYPE_CHAR    3
+#define TYPE_SHORT   4
+#define TYPE_INT     5
+#define TYPE_LONG    6
+#define TYPE_FLOAT   7
+#define TYPE_DOUBLE  8
+
+struct VariableType {
     int32_t type;
     int32_t classIndex;
+    int32_t arrayDepth;
+};
+
+struct VariableInfo {
+    struct NString name;
+    struct VariableType type;
+    boolean isStatic;
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -45,6 +61,8 @@ struct CodeGenerationData;
 
 static void generateCodeImplementation(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData);
 static boolean handleIgnorables(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData);
+
+static void destroyAndDeleteClassInfo(struct ClassInfo* classInfo);
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Code generation data
@@ -82,27 +100,13 @@ static void initializeCodeGenerationData(struct CodeGenerationData* codeGenerati
     NVector.initialize(&codeGenerationData->classes, 0, sizeof(struct ClassInfo*));
 }
 
-static void destroyAndDeleteVariableInfo(struct VariableInfo* variableInfo) {
-    NString.destroy(&variableInfo->name);
-    NFREE(variableInfo, "CodeGeneration.destroyAndDeleteVariableInfo() variableInfo");
-}
-
-static void destroyAndDeleteClassInfo(struct ClassInfo* classInfo) {
-    NString.destroy(&classInfo->name);
-    for (int32_t i=NVector.size(&classInfo->members)-1; i>=0; i--) {
-        destroyAndDeleteVariableInfo(*(struct VariableInfo **) NVector.getLast(&classInfo->members));
-    }
-    NVector.destroy(&classInfo->members);
-    NFREE(classInfo, "CodeGeneration.destroyAndDeleteClassInfo() classInfo");
-}
-
 static void destroyCodeGenerationData(struct CodeGenerationData* codeGenerationData) {
     NString.destroy(&codeGenerationData->outString);
     NVector.destroy(&codeGenerationData->colorStack);
 
     // Classes,
     for (int32_t i=NVector.size(&codeGenerationData->classes)-1; i>=0; i--) {
-        destroyAndDeleteClassInfo(*(struct ClassInfo**) NVector.getLast(&codeGenerationData->classes));
+        destroyAndDeleteClassInfo(*(struct ClassInfo**) NVector.get(&codeGenerationData->classes, i));
     }
     NVector.destroy(&codeGenerationData->classes);
 }
@@ -146,7 +150,12 @@ static void codeAppend(struct CodeGenerationData* codeGenerationData, const char
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #define SkipIngorables \
-    while (handleIgnorables(*((struct NCC_ASTNode**) NVector.get(&tree->childNodes, currentChildIndex)), codeGenerationData)) currentChildIndex++;
+    while (True) { \
+        struct NCC_ASTNode** node = NVector.get(&tree->childNodes, currentChildIndex); \
+        if (!node) break; \
+        if (!handleIgnorables(*node, codeGenerationData)) break; \
+        currentChildIndex++; \
+    }
 
 #define Begin \
     int32_t currentChildIndex = 0; \
@@ -154,9 +163,14 @@ static void codeAppend(struct CodeGenerationData* codeGenerationData, const char
     struct NCC_ASTNode* currentChild = *((struct NCC_ASTNode**) NVector.get(&tree->childNodes, currentChildIndex));
 
 #define NextChild \
-    currentChildIndex++; \
-    SkipIngorables \
-    currentChild = *((struct NCC_ASTNode**) NVector.get(&tree->childNodes, currentChildIndex));
+    { \
+        currentChildIndex++; \
+        SkipIngorables \
+        struct NCC_ASTNode** node = NVector.get(&tree->childNodes, currentChildIndex); \
+        currentChild = node ? *node : 0; \
+    }
+
+#define VALUE NString.get(&currentChild->value)
 
 #define Equals(text) \
     NCString.equals(NString.get(&currentChild->name), text)
@@ -165,10 +179,65 @@ static void codeAppend(struct CodeGenerationData* codeGenerationData, const char
 // Variable
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-// TODO: pass vector...
-static void parseVariableDeclaration(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
+static void destroyAndDeleteVariableInfo(struct VariableInfo* variableInfo) {
+    NString.destroy(&variableInfo->name);
+    NFREE(variableInfo, "CodeGeneration.destroyAndDeleteVariableInfo() variableInfo");
+}
 
-    // declaration: static int[][] c = {{12}, {24}};
+static struct VariableType* parseTypeSpecifier(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
+
+    // type-specifier: int[][]
+    // ├─int: int
+    // ├─array-specifier: []
+    // │ ├─[: [
+    // │ └─]: ]
+    // │
+    // └─array-specifier: []
+    //   ├─[: [
+    //   └─]: ]
+
+    // #{{void}     {char}
+    //   {short}    {int}      {long}
+    //   {float}    {double}
+    //   {class-specifier}
+    //   {enum-specifier}}
+    // {${} ${array-specifier}}^*
+
+    struct VariableType* variableType = NMALLOC(sizeof(struct VariableType), "CodeGeneration.parseTypeSpecifier() variableType");
+    NSystemUtils.memset(variableType, 0, sizeof(struct VariableType));
+
+    Begin
+    if (Equals("void")) {
+        variableType->type = TYPE_VOID;
+        NextChild
+        if (currentChild) {
+            NERROR("parseTypeSpecifier()", "Can't make arrays of void type.");
+            return 0;
+        }
+    }
+    else if (Equals("char"  )) { variableType->type = TYPE_CHAR  ; }
+    else if (Equals("short" )) { variableType->type = TYPE_SHORT ; }
+    else if (Equals("int"   )) { variableType->type = TYPE_INT   ; }
+    else if (Equals("long"  )) { variableType->type = TYPE_LONG  ; }
+    else if (Equals("float" )) { variableType->type = TYPE_FLOAT ; }
+    else if (Equals("double")) { variableType->type = TYPE_DOUBLE; }
+    else {
+        // TODO: enum and class...
+    }
+
+    NextChild
+    while(currentChild) {
+        // Parse array specifier(s),
+        variableType->arrayDepth++;
+        NextChild
+    }
+
+    return variableType;
+}
+
+static struct VariableInfo* parseVariableDeclaration(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
+
+    // declaration: static int[][] c;
     // ├─static: static
     // ├─insert space:
     // ├─type-specifier: int[][]
@@ -182,71 +251,52 @@ static void parseVariableDeclaration(struct NCC_ASTNode* tree, struct CodeGenera
     // │   └─]: ]
     // │
     // ├─insert space:
-    // ├─init-declarator-list: c = {{12}, {24}}
-    // │ └─init-declarator: c = {{12}, {24}}
-    // │   ├─identifier: c
-    // │   ├─insert space:
-    // │   ├─=: =
-    // │   ├─insert space:
-    // │   ├─OB: {
-    // │   ├─OB: {
-    // │   ├─assignment-expression: 12
-    // │   │ └─conditional-expression: 12
-    // │   │   └─logical-or-expression: 12
-    // │   │     └─logical-and-expression: 12
-    // │   │       └─or-expression: 12
-    // │   │         └─xor-expression: 12
-    // │   │           └─and-expression: 12
-    // │   │             └─equality-expression: 12
-    // │   │               └─relational-expression: 12
-    // │   │                 └─shift-expression: 12
-    // │   │                   └─additive-expression: 12
-    // │   │                     └─multiplicative-expression: 12
-    // │   │                       └─cast-expression: 12
-    // │   │                         └─unary-expression: 12
-    // │   │                           └─postfix-expression: 12
-    // │   │                             └─primary-expression: 12
-    // │   │                               └─constant: 12
-    // │   │                                 └─integer-constant: 12
-    // │   │
-    // │   ├─CB: }
-    // │   ├─,: ,
-    // │   ├─OB: {
-    // │   ├─assignment-expression: 24
-    // │   │ └─conditional-expression: 24
-    // │   │   └─logical-or-expression: 24
-    // │   │     └─logical-and-expression: 24
-    // │   │       └─or-expression: 24
-    // │   │         └─xor-expression: 24
-    // │   │           └─and-expression: 24
-    // │   │             └─equality-expression: 24
-    // │   │               └─relational-expression: 24
-    // │   │                 └─shift-expression: 24
-    // │   │                   └─additive-expression: 24
-    // │   │                     └─multiplicative-expression: 24
-    // │   │                       └─cast-expression: 24
-    // │   │                         └─unary-expression: 24
-    // │   │                           └─postfix-expression: 24
-    // │   │                             └─primary-expression: 24
-    // │   │                               └─constant: 24
-    // │   │                                 └─integer-constant: 24
-    // │   │
-    // │   ├─CB: }
-    // │   └─CB: }
-    // │
+    // ├─identifier: c
     // └─;: ;
 
-    // ${declaration-specifiers} {${+ } ${init-declarator-list}}|${ε} ${} ${;}
+    // ${declaration-specifiers} ${+ } ${identifier-list} ${} ${;}
 
-    // TODO: create variable...
+    // Create variable,
+    struct VariableInfo* newVariable = NMALLOC(sizeof(struct VariableInfo), "CodeGeneration.parseVariableDeclaration() newVariable");
 
     Begin
 
+    // Parse storage class specifier (we only have static),
     if (Equals("static")) {
-        // ...xxx
+        newVariable->isStatic = True;
+        NextChild
+    } else {
+        newVariable->isStatic = False;
     }
 
+    // Parse type specifier,
+    struct VariableType* variableType = parseTypeSpecifier(currentChild, codeGenerationData);
+    if (!variableType) {
+        NFREE(newVariable, "CodeGeneration.parseVariableDeclaration() newVariable 1");
+        return 0;
+    }
 
+    // Check for voids,
+    if (variableType->type == TYPE_VOID) {
+        NERROR("parseVariableDeclaration()", "Void is not a valid variable type.");
+        NFREE( newVariable, "CodeGeneration.parseVariableDeclaration() newVariable 2");
+        NFREE(variableType, "CodeGeneration.parseVariableDeclaration() variableType 1");
+        return 0;
+    }
+
+    // Assign type,
+    newVariable->type = *variableType;
+    NFREE(variableType, "CodeGeneration.parseVariableDeclaration() variableType 2");
+
+    // Parse name,
+    NextChild
+    NString.initialize(&newVariable->name, "%s", VALUE);
+
+    // TODO: continue parsing, there could be more variables....
+    // TODO: pass vector instead?
+
+
+    return newVariable;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -263,9 +313,18 @@ static struct ClassInfo* createClass(struct CodeGenerationData* codeGenerationDa
     return newClass;
 }
 
+static void destroyAndDeleteClassInfo(struct ClassInfo* classInfo) {
+    NString.destroy(&classInfo->name);
+    for (int32_t i=NVector.size(&classInfo->members)-1; i>=0; i--) {
+        destroyAndDeleteVariableInfo(*(struct VariableInfo **) NVector.get(&classInfo->members, i));
+    }
+    NVector.destroy(&classInfo->members);
+    NFREE(classInfo, "CodeGeneration.destroyAndDeleteClassInfo() classInfo");
+}
+
 static struct ClassInfo* getClass(struct CodeGenerationData* codeGenerationData, const char* className) {
     for (int32_t i=NVector.size(&codeGenerationData->classes)-1; i>=0; i--) {
-        struct ClassInfo* classInfo = *(struct ClassInfo**) NVector.getLast(&codeGenerationData->classes);
+        struct ClassInfo* classInfo = *(struct ClassInfo**) NVector.get(&codeGenerationData->classes, i);
         if (NCString.equals(className, NString.get(&classInfo->name))) return classInfo;
     }
     return 0;
@@ -275,8 +334,7 @@ static void parseClassDeclaration(struct NCC_ASTNode* tree, struct CodeGeneratio
 
     // ${class} ${+ } ${identifier}
     //   {${} ${;} ${+\n}} |
-    //   {${+ } ${OB} ${+\n} ${declaration-list} ${} ${CB} ${+\n}}
-
+    //   {${+ } ${OB} {${+\n} ${declaration-list}}|${ε} ${} ${CB} ${+\n}}
     Begin
 
     // Skip the "class" keyword,
@@ -300,19 +358,20 @@ static void parseClassDeclaration(struct NCC_ASTNode* tree, struct CodeGeneratio
     class->defined = True;
 
     // Parse declarations,
-    /*while (True)*/ {
+    while (True) {
         // Check if closing bracket reached,
         NextChild
         if (Equals("CB")) return;
 
         // Parse variable declaration,
-        parseVariableDeclaration(currentChild, codeGenerationData);
-        //...xxx
+        struct VariableInfo* newMember = parseVariableDeclaration(currentChild, codeGenerationData);
+        if (!newMember) return;
+
+        // TODO: check if variable declared before,
+        // ....xxx
+
+        NVector.pushBack(&class->members, &newMember);
     }
-
-    //"${declaration} ${+\n} ${declaration-list}|${ε}"));
-
-    // ${declaration-list} ${} ${CB} ${+\n}
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -320,6 +379,8 @@ static void parseClassDeclaration(struct NCC_ASTNode* tree, struct CodeGeneratio
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 static boolean handleIgnorables(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
+
+    if (!tree) return False;
 
     const char* ruleNameCString = NString.get(&tree->name);
     if (NCString.equals(ruleNameCString, "insert space")) {

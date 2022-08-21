@@ -399,7 +399,7 @@ void defineLanguage(struct NCC* ncc) {
     NCC_addRule   (pushingRuleData.set(&pushingRuleData, "class-declaration",
                                        "${class} ${+ } ${identifier} "
                                        "{${} ${;} ${+\n}} |"
-                                       "{${+ } ${OB} ${+\n} ${declaration-list} ${} ${CB} ${+\n}}"));
+                                       "{${+ } ${OB} {${+\n} ${declaration-list}}|${ε} ${} ${CB} ${+\n}}"));
 
     // Declaration list,
     NCC_updateRule(  plainRuleData.set(&  plainRuleData, "declaration-list",
