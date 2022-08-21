@@ -17,6 +17,9 @@
 #define PRINT_TREES 1
 #define PRINT_COLORED_TREES 1
 
+#define PERFORM_ERROR_CHECKING_TESTS 0
+#define PERFORM_REGULAR_TESTS 1
+
 static void test(struct NCC* ncc, const char* code) {
 
     NLOGI("", "%sTesting: %s%s", NTCOLOR(GREEN_BRIGHT), NTCOLOR(BLUE_BRIGHT), code);
@@ -63,6 +66,7 @@ void NMain() {
     // Test,
     //test(&ncc, "\"besm Allah\" //asdasdasdas\n  \"AlRa7maan AlRa7eem\"");
 
+    #if PERFORM_ERROR_CHECKING_TESTS
     test(&ncc, "class MyFirstClass;\n"   \
                "class MyFirstClass;\n"   \
                "class MyFirstClass {\n"  \
@@ -72,13 +76,26 @@ void NMain() {
                "class MyFirstClass {\n"  \
                "    int a;\n"            \
                "}"
-               );
-
+    );
     test(&ncc, "class MyFirstClass {\n"   \
                "    static int[] a, b;\n" \
                "    static int[][] c, d;\n" \
                "    float d;\n"           \
                "}");
+    #endif
+
+    #if PERFORM_REGULAR_TESTS
+
+    test(&ncc, "class MyFirstClass;");
+//    test(&ncc, "class MyFirstClass {}");
+//    test(&ncc, "class MyFirstClass {\n"   \
+//               "    static int[] a, b;\n" \
+//               "    static int[][] c, d;\n" \
+//               "    float e;\n"           \
+//               "}");
+    #endif
+
+
 
     // Clean up,
     NCC_destroyNCC(&ncc);
