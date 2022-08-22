@@ -369,7 +369,7 @@ void defineLanguage(struct NCC* ncc) {
     NCC_addRule   (  plainRuleData.set(&  plainRuleData, "storage-class-specifier", "STUB!"));
     NCC_addRule   (  plainRuleData.set(&  plainRuleData, "type-specifier", "STUB!"));
     NCC_updateRule(  plainRuleData.set(&  plainRuleData, "declaration-specifiers",
-                                       "${storage-class-specifier}|${ε} ${+ } ${type-specifier}"));
+                                       "{${storage-class-specifier} ${+ }}|${ε} ${type-specifier}"));
 
     // Storage class specifier,
     NCC_updateRule(  plainRuleData.set(&  plainRuleData, "storage-class-specifier",
@@ -519,8 +519,8 @@ void defineLanguage(struct NCC* ncc) {
     // Function definition,
     NCC_updateRule(pushingRuleData.set(&pushingRuleData, "function-definition",
                                        "${declaration-specifiers} ${+ } "
-                                       "${identifier} ${+ } "
-                                       "${(} ${} ${parameter-list} ${} ${)} ${+ } "
+                                       "${identifier} ${} "
+                                       "${(} ${} ${parameter-list}|${ε} ${} ${)} ${+ } "
                                        "${compound-statement} ${+\n}"));
 
     // Test document,

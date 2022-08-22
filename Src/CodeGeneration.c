@@ -21,6 +21,8 @@
 
 #define COLORIZE_CODE 1
 
+#define TAB "    "
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Code constructs
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -121,7 +123,7 @@ static void codeAppend(struct CodeGenerationData* codeGenerationData, const char
     // Append indentation,
     if (NCString.endsWith(NString.get(&codeGenerationData->outString), "\n")) {
         for (int32_t i=0; i<codeGenerationData->indentationCount; i++) {
-            NString.append(&codeGenerationData->outString, "   ");
+            NString.append(&codeGenerationData->outString, TAB);
         }
     }
 
@@ -168,7 +170,7 @@ static void codeAppend(struct CodeGenerationData* codeGenerationData, const char
 
 #define Begin \
     int32_t currentChildIndex = 0; \
-    SkipIngorables \
+    SkipIngorablesSilently \
     struct NCC_ASTNode* currentChild = *((struct NCC_ASTNode**) NVector.get(&tree->childNodes, currentChildIndex));
 
 #define NextChild \
@@ -263,6 +265,23 @@ static struct VariableType* parseTypeSpecifier(struct NCC_ASTNode* tree, struct 
     return variableType;
 }
 
+static void appendVariableTypeCode(struct VariableType* type, struct CodeGenerationData* codeGenerationData) {
+    switch (type->type) {
+        case TYPE_VOID  : Append("void"   ) break;
+        case TYPE_CHAR  : Append("char"   ) break;
+        case TYPE_SHORT : Append("short"  ) break;
+        case TYPE_INT   : Append("int32_t") break;
+        case TYPE_LONG  : Append("int64_t") break;
+        case TYPE_FLOAT : Append("float"  ) break;
+        case TYPE_DOUBLE: Append("double" ) break;
+        default:
+            // TODO: enum and class...
+            break;
+    }
+
+    for (int32_t i=0; i<type->arrayDepth; i++) Append("*")
+}
+
 static boolean parseVariableDeclaration(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData, struct NVector* outputVector) {
 
     // declaration: static int[][] c, d;
@@ -352,7 +371,12 @@ static boolean parseVariableDeclaration(struct NCC_ASTNode* tree, struct CodeGen
 }
 
 static void appendVariableDeclarationCode(struct VariableInfo* variable, struct CodeGenerationData* codeGenerationData, const char* prefix, const char* postfix) {
-    //....xxx
+    appendVariableTypeCode(&variable->type, codeGenerationData);
+    Append(" ")
+    Append(prefix)
+    Append(NString.get(&variable->name))
+    Append(postfix)
+    Append(";")
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -398,9 +422,10 @@ static void parseClassDeclaration(struct NCC_ASTNode* tree, struct CodeGeneratio
     NextChild
 
     // Parse class name, if not and existing one, create new,
-    const char* className = NString.get(&currentChild->value);
+    const char* className = VALUE;
     struct ClassInfo* class = getClass(codeGenerationData, className);
     if (!class) class = createClass(codeGenerationData, className);
+    Append(className);
     NextChild
 
     // Return if semi-colon found (forward-declaration),
@@ -416,26 +441,45 @@ static void parseClassDeclaration(struct NCC_ASTNode* tree, struct CodeGeneratio
     }
     class->defined = True;
     Append("{")
+    NextChildSilently
+    if (!Equals("CB")) Append("\n")
 
     // Parse declarations,
     while (True) {
-        NextChild
 
         // Check if closing bracket reached,
         if (Equals("CB")) {
 
             // Append non-static variables code,
-            //...xxx
-            Append("};")
+            int32_t membersCount = NVector.size(&class->members);
+            for (int32_t i=0; i<membersCount; i++) {
+                struct VariableInfo* currentVariable = *(struct VariableInfo**) NVector.get(&class->members, i);
+                if (currentVariable->isStatic) continue;
+                Append(TAB)
+                appendVariableDeclarationCode(currentVariable, codeGenerationData, "", "");
+                Append("\n")
+            }
+            Append("};\n")
 
             // Append static variables code,
-            //...xxx
+            struct NString prefix;
+            NString.initialize(&prefix, "_%s_", className);
+            const char* prefixCString = NString.get(&prefix);
+            for (int32_t i=0; i<membersCount; i++) {
+                struct VariableInfo* currentVariable = *(struct VariableInfo**) NVector.get(&class->members, i);
+                if (!currentVariable->isStatic) continue;
+                appendVariableDeclarationCode(currentVariable, codeGenerationData, prefixCString, "_");
+                Append("\n")
+            }
+            NString.destroy(&prefix);
 
             return;
         }
 
         // Parse variable declaration,
         if (!parseVariableDeclaration(currentChild, codeGenerationData, &class->members)) return;
+
+        NextChildSilently
     }
 }
 

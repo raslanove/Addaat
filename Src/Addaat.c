@@ -14,7 +14,7 @@
 #include <NCString.h>
 #include <NError.h>
 
-#define PRINT_TREES 1
+#define PRINT_TREES 0
 #define PRINT_COLORED_TREES 1
 
 #define PERFORM_ERROR_CHECKING_TESTS 0
@@ -86,13 +86,18 @@ void NMain() {
 
     #if PERFORM_REGULAR_TESTS
 
-    test(&ncc, "class MyFirstClass;");
+//    test(&ncc, "class MyFirstClass;");
 //    test(&ncc, "class MyFirstClass {}");
 //    test(&ncc, "class MyFirstClass {\n"   \
 //               "    static int[] a, b;\n" \
-//               "    static int[][] c, d;\n" \
-//               "    float e;\n"           \
+//               "    static double[][] c, d;\n" \
+//               "    float e, f;\n"           \
 //               "}");
+
+    test(&ncc, "void main() {\n"
+               "    printf(\"besm Allah\\n\");\n"
+               "}");
+
     #endif
 
 
