@@ -49,7 +49,28 @@ static void test(struct NCC* ncc, const char* code) {
     if (matched && matchingResult.matchLength == codeLength) {
         NLOGI("test()", "Success!");
     } else {
-        NERROR("test()", "Failed! Match: %s, length: %d", matched ? "True" : "False", matchingResult.matchLength);
+        struct NString errorMessage;
+        NString.initialize(&errorMessage, "Failed! Match: %s, length: %d\n", matched ? "True" : "False", matchingResult.matchLength);
+
+        // Find the line and column numbers,
+        int32_t line=1, column=1;
+        for (int32_t i=0; i<ncc->maxMatchLength; i++) {
+            if (code[i] == '\n') {
+                line++;
+                column = 1;
+            } else {
+                column++;
+            }
+        }
+        NString.append(&errorMessage, "          Max match length: %d, line: %d, column: %d\n", ncc->maxMatchLength, line, column);
+
+        // Print parent rules,
+        const char* ruleName;
+        while (NVector.popBack(&ncc->maxMatchRuleStack, &ruleName)) NString.append(&errorMessage, "            %s\n", ruleName);
+
+        // Print the error message,
+        NERROR("test()", "%s", NString.get(&errorMessage));
+        NString.destroy(&errorMessage);
     }
     NLOGI("", "");
 }
@@ -95,7 +116,7 @@ void NMain() {
 //               "}");
 
     test(&ncc, "void main() {\n"
-               "    printf(\"besm Allah\\n\");\n"
+               "    printf(\"besm Allah\\n\")\n"
                "}");
 
     #endif

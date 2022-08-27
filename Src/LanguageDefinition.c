@@ -454,6 +454,7 @@ void defineLanguage(struct NCC* ncc) {
     NCC_addRule   (pushingRuleData.set(&pushingRuleData, "block-item-list", "STUB!"));
     NCC_updateRule(pushingRuleData.set(&pushingRuleData, "compound-statement",
                                        "${OB} ${} ${block-item-list}|${ε} ${} ${CB}"));
+                                       //"${OB} ${} ${block-item-list} ${} ${CB}"));
 
     // Block item list,
     NCC_addRule   (  plainRuleData.set(&  plainRuleData, "block-item", "STUB!"));
@@ -469,6 +470,8 @@ void defineLanguage(struct NCC* ncc) {
     // Expression statement,
     NCC_updateRule(pushingRuleData.set(&pushingRuleData, "expression-statement",
                                        "${expression}|${ε} ${} ${;}"));
+                                       //"{${expression} ${} ${;}} | "
+                                       //"{${} ${;}}"));
 
     // Selection statement,
     NCC_updateRule(pushingRuleData.set(&pushingRuleData, "selection-statement",
