@@ -211,7 +211,7 @@ void defineLanguage(struct NCC* ncc) {
     // String literal,
     // See: https://stackoverflow.com/a/13087264/1942069   and   https://stackoverflow.com/a/13445170/1942069
     NCC_addRule(pushingRuleData.set(&pushingRuleData, "string-literal-fragment", "{u8}|u|U|L|${ε} \" { ${c-char}|${hexadecimal-escape-sequence}|${universal-character-name}|{\\\\${c-char-with-backslash-without-uUxX}} }^* \""));
-    NCC_addRule(pushingRuleData.set(&pushingRuleData, "string-literal", "${string-literal-fragment} {${} ${string-literal-fragment}}|${ε}"));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData, "string-literal", "${string-literal-fragment} {${} ${string-literal-fragment}}^*"));
 
     // =====================================
     // Phrase structure,
@@ -454,7 +454,6 @@ void defineLanguage(struct NCC* ncc) {
     NCC_addRule   (pushingRuleData.set(&pushingRuleData, "block-item-list", "STUB!"));
     NCC_updateRule(pushingRuleData.set(&pushingRuleData, "compound-statement",
                                        "${OB} ${} ${block-item-list}|${ε} ${} ${CB}"));
-                                       //"${OB} ${} ${block-item-list} ${} ${CB}"));
 
     // Block item list,
     NCC_addRule   (  plainRuleData.set(&  plainRuleData, "block-item", "STUB!"));
@@ -470,8 +469,6 @@ void defineLanguage(struct NCC* ncc) {
     // Expression statement,
     NCC_updateRule(pushingRuleData.set(&pushingRuleData, "expression-statement",
                                        "${expression}|${ε} ${} ${;}"));
-                                       //"{${expression} ${} ${;}} | "
-                                       //"{${} ${;}}"));
 
     // Selection statement,
     NCC_updateRule(pushingRuleData.set(&pushingRuleData, "selection-statement",
@@ -505,9 +502,10 @@ void defineLanguage(struct NCC* ncc) {
                                                         we consider early termination a feature now?
 
     // External declaration,
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "function-declaration", "STUB!"));
     NCC_addRule   (  plainRuleData.set(&  plainRuleData, "function-definition", "STUB!"));
     NCC_updateRule(  plainRuleData.set(&  plainRuleData, "external-declaration",
-                                       "#{{function-definition} {declaration} {class-declaration}}"));
+                                       "#{{function-declaration} {function-definition} {declaration} {class-declaration}}"));
 
     // Parameter declaration,
     NCC_addRule   (pushingRuleData.set(&pushingRuleData, "parameter-declaration",
@@ -518,6 +516,12 @@ void defineLanguage(struct NCC* ncc) {
                                        "${parameter-declaration} {"
                                        "   ${} ${,} ${+ } ${parameter-declaration}"
                                        "}^*"));
+
+    // Function declaration,
+    NCC_updateRule(pushingRuleData.set(&pushingRuleData, "function-declaration",
+                                       "${declaration-specifiers} ${+ } "
+                                       "${identifier} ${} "
+                                       "${(} ${} ${parameter-list}|${ε} ${} ${)} ${} ${;} ${+\n}"));
 
     // Function definition,
     NCC_updateRule(pushingRuleData.set(&pushingRuleData, "function-definition",

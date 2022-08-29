@@ -27,12 +27,6 @@
 // Code constructs
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-struct ClassInfo {
-    struct NString name;
-    struct NVector members; // struct VariableInfo*.
-    boolean defined;
-};
-
 #define TYPE_VOID    0
 #define TYPE_CLASS   1
 #define TYPE_ENUM    2
@@ -55,6 +49,19 @@ struct VariableInfo {
     boolean isStatic;
 };
 
+struct FunctionInfo {
+    struct NString name;
+    struct NVector parameters; // struct VariableInfo*.
+    struct VariableType returnType;
+    boolean isStatic;
+};
+
+struct ClassInfo {
+    struct NString name;
+    struct NVector members; // struct VariableInfo*.
+    boolean defined;
+};
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Forward declarations
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -65,6 +72,7 @@ static void generateCodeImplementation(struct NCC_ASTNode* tree, struct CodeGene
 static boolean handleIgnorables(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData);
 static boolean handleIgnorablesSilently(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData);
 
+static void destroyAndDeleteFunctionInfo(struct FunctionInfo* functionInfo);
 static void destroyAndDeleteClassInfo(struct ClassInfo* classInfo);
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -84,7 +92,8 @@ struct CodeGenerationData {
     int32_t indentationCount;
 
     // Symbols,
-    struct NVector classes; // struct ClassInfo*
+    struct NVector classes;   // struct ClassInfo*
+    struct NVector functions; // struct FunctionInfo*
 };
 
 static void initializeCodeGenerationData(struct CodeGenerationData* codeGenerationData) {
@@ -100,12 +109,19 @@ static void initializeCodeGenerationData(struct CodeGenerationData* codeGenerati
     codeGenerationData->indentationCount = 0;
 
     // Symbols,
-    NVector.initialize(&codeGenerationData->classes, 0, sizeof(struct ClassInfo*));
+    NVector.initialize(&codeGenerationData->classes  , 0, sizeof(struct ClassInfo*));
+    NVector.initialize(&codeGenerationData->functions, 0, sizeof(struct FunctionInfo*));
 }
 
 static void destroyCodeGenerationData(struct CodeGenerationData* codeGenerationData) {
     NString.destroy(&codeGenerationData->outString);
     NVector.destroy(&codeGenerationData->colorStack);
+
+    // Functions,
+    for (int32_t i=NVector.size(&codeGenerationData->functions)-1; i>=0; i--) {
+        destroyAndDeleteFunctionInfo(*(struct FunctionInfo**) NVector.get(&codeGenerationData->functions, i));
+    }
+    NVector.destroy(&codeGenerationData->functions);
 
     // Classes,
     for (int32_t i=NVector.size(&codeGenerationData->classes)-1; i>=0; i--) {
@@ -212,6 +228,13 @@ static struct VariableInfo* getVariable(struct NVector* variables, const char* v
         if (NCString.equals(variableName, NString.get(&variableInfo->name))) return variableInfo;
     }
     return 0;
+}
+
+static boolean typesEqual(struct VariableType* type1, struct VariableType* type2) {
+    return
+        (type1->type       == type2->type      ) &&
+        (type1->classIndex == type2->classIndex) &&
+        (type1->arrayDepth == type2->arrayDepth);
 }
 
 static struct VariableType* parseTypeSpecifier(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
@@ -380,6 +403,165 @@ static void appendVariableDeclarationCode(struct VariableInfo* variable, struct 
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Functions
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+static void destroyAndDeleteFunctionInfo(struct FunctionInfo* functionInfo) {
+    NString.destroy(&functionInfo->name);
+    for (int32_t i= NVector.size(&functionInfo->parameters)-1; i>=0; i--) {
+        destroyAndDeleteVariableInfo(*(struct VariableInfo**) NVector.get(&functionInfo->parameters, i));
+    }
+    NVector.destroy(&functionInfo->parameters);
+    NFREE(functionInfo, "CodeGeneration.destroyAndDeleteFunctionInfo() functionInfo");
+}
+
+static struct FunctionInfo* getFunction(struct NVector* functions, const char* functionName) {
+    for (int32_t i=NVector.size(functions)-1; i>=0; i--) {
+        struct FunctionInfo* functionInfo = *(struct FunctionInfo**) NVector.get(functions, i);
+        if (NCString.equals(functionName, NString.get(&functionInfo->name))) return functionInfo;
+    }
+    return 0;
+}
+
+static boolean sameParameters(struct FunctionInfo* function1, struct FunctionInfo* function2) {
+
+    // Check parameters count,
+    int32_t function1ParametersCount = NVector.size(&function1->parameters);
+    int32_t function2ParametersCount = NVector.size(&function2->parameters);
+    if (function1ParametersCount != function2ParametersCount) return False;
+
+    // Check parameters' types,
+    for (int32_t i=function1ParametersCount-1; i>=0; i--) {
+        struct VariableInfo* function1Parameter = *(struct VariableInfo**) NVector.get(&function1->parameters, i);
+        struct VariableInfo* function2Parameter = *(struct VariableInfo**) NVector.get(&function2->parameters, i);
+        if (!typesEqual(&function1Parameter->type, &function2Parameter->type)) return False;
+    }
+
+    return True;
+}
+
+static boolean sameSignature(struct FunctionInfo* function1, struct FunctionInfo* function2) {
+
+    // Check return values,
+    if (!typesEqual(&function1->returnType, &function2->returnType)) return False;
+
+    // Check parameters,
+    return sameParameters(function1, function2);
+}
+
+static struct FunctionInfo* parseFunctionDeclaration(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
+
+    // function-declaration: void main();
+    // ├─type-specifier: void
+    // │ └─void: void
+    // │
+    // ├─insert space:
+    // ├─identifier: main
+    // │ └─identifier-content: main
+    // │
+    // ├─(: (
+    // ├─): )
+    // ├─;: ;
+    // └─insert \n:
+
+    // ${declaration-specifiers} ${+ }
+    // ${identifier} ${}
+    // ${(} ${} ${parameter-list}|${ε} ${} ${)} ${} ${;} ${+\n}
+
+    Begin
+
+    // Create function,
+    struct FunctionInfo* newFunction = NMALLOC(sizeof(struct FunctionInfo), "CodeGeneration.parseFunctionDeclaration() newFunction");
+
+    // Parse storage class specifier (we only have static),
+    if (Equals("static")) {
+        newFunction->isStatic = True;
+        NextChildSilently
+    } else {
+        newFunction->isStatic = False;
+    }
+
+    // Parse type specifier,
+    struct VariableType* returnType = parseTypeSpecifier(currentChild, codeGenerationData);
+    if (!returnType) {
+        NFREE(newFunction, "CodeGeneration.parseFunctionDeclaration() newFunction");
+        return 0;
+    }
+
+    // Assign type,
+    newFunction->returnType = *returnType;
+    NFREE(returnType, "CodeGeneration.parseFunctionDeclaration() returnType");
+
+    // Parse name,
+    NextChildSilently
+    NString.initialize(&newFunction->name, "%s", VALUE);
+
+    // Skip open parenthesis,
+    NextChildSilently
+
+    // Parse parameter list,
+    NVector.initialize(&newFunction->parameters, 0, sizeof(struct VariableInfo*));
+    NextChildSilently
+    while (!Equals(")")) {
+
+        // Parse type specifier,
+        struct VariableType* parameterType = parseTypeSpecifier(currentChild, codeGenerationData);
+        if (!parameterType) {
+            destroyAndDeleteFunctionInfo(newFunction);
+            return 0;
+        }
+
+        // Check for voids,
+        if (parameterType->type == TYPE_VOID) {
+            NERROR("parseFunctionDeclaration()", "Void is not a valid parameter type.");
+            NFREE(parameterType, "CodeGeneration.parseFunctionDeclaration() parameterType 1");
+            destroyAndDeleteFunctionInfo(newFunction);
+            return 0;
+        }
+
+        // Check for duplicates,
+        NextChildSilently
+        if (getVariable(&newFunction->parameters, VALUE)) {
+            NERROR("parseFunctionDeclaration()", "Parameter redefinition: %s%s%s.", NTCOLOR(HIGHLIGHT), VALUE, NTCOLOR(STREAM_DEFAULT));
+            NFREE(parameterType, "CodeGeneration.parseFunctionDeclaration() parameterType 2");
+            destroyAndDeleteFunctionInfo(newFunction);
+            return 0;
+        }
+
+        // Create a new parameter,
+        struct VariableInfo* newParameter = NMALLOC(sizeof(struct VariableInfo), "CodeGeneration.parseFunctionDeclaration() newParameter");
+        NString.initialize(&newParameter->name, "%s", VALUE);
+        newParameter->isStatic = False;
+        newParameter->type = *parameterType;
+        NFREE(parameterType, "CodeGeneration.parseFunctionDeclaration() parameterType 3");
+        NVector.pushBack(&newFunction->parameters, &newParameter);
+
+        // Skip comma,
+        NextChildSilently
+        if (Equals(",")) NextChildSilently
+    }
+
+    return newFunction;
+}
+
+static void parseGlobalFunctionDeclaration(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
+
+    struct FunctionInfo* newFunction = parseFunctionDeclaration(tree, codeGenerationData);
+    if (!newFunction) return;
+
+    // If it's new, add it and return,
+    struct FunctionInfo* existingFunction = getFunction(&codeGenerationData->functions, NString.get(&newFunction->name));
+    if (!existingFunction) {
+        NVector.pushBack(&codeGenerationData->functions, &newFunction);
+        return ;
+    }
+
+    // If it's a duplicate, check if the signature changed,
+    // TODO: allow polymorphism...
+    //sameSignature(...xxx)
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Class
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -543,6 +725,8 @@ static void generateCodeImplementation(struct NCC_ASTNode* tree, struct CodeGene
         codeAppend(codeGenerationData, "}");
     } else if (NCString.equals(ruleNameCString, "class-declaration")) {
         parseClassDeclaration(tree, codeGenerationData);
+    } else if (NCString.equals(ruleNameCString, "function-declaration")) {
+        parseGlobalFunctionDeclaration(tree, codeGenerationData);
     } else {
         if (NVector.size(&tree->childNodes)) {
             proceedToChildren = True;
