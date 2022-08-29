@@ -517,18 +517,19 @@ void defineLanguage(struct NCC* ncc) {
                                        "   ${} ${,} ${+ } ${parameter-declaration}"
                                        "}^*"));
 
-    // Function declaration,
-    NCC_updateRule(pushingRuleData.set(&pushingRuleData, "function-declaration",
+    // Function head,
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "function-head",
                                        "${declaration-specifiers} ${+ } "
                                        "${identifier} ${} "
-                                       "${(} ${} ${parameter-list}|${ε} ${} ${)} ${} ${;} ${+\n}"));
+                                       "${(} ${} ${parameter-list}|${ε} ${} ${)}"));
+
+    // Function declaration,
+    NCC_updateRule(pushingRuleData.set(&pushingRuleData, "function-declaration",
+                                       "${function-head} ${} ${;} ${+\n}"));
 
     // Function definition,
     NCC_updateRule(pushingRuleData.set(&pushingRuleData, "function-definition",
-                                       "${declaration-specifiers} ${+ } "
-                                       "${identifier} ${} "
-                                       "${(} ${} ${parameter-list}|${ε} ${} ${)} ${+ } "
-                                       "${compound-statement} ${+\n}"));
+                                       "${function-head} ${+ } ${compound-statement} ${+\n}"));
 
     // Test document,
     NCC_addRule   (pushingRuleData.set(&pushingRuleData, "TestDocument",

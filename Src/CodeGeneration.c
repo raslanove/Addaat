@@ -544,6 +544,32 @@ static struct FunctionInfo* parseFunctionDeclaration(struct NCC_ASTNode* tree, s
     return newFunction;
 }
 
+static void appendFunctionHeadCode(struct FunctionInfo* function, struct CodeGenerationData* codeGenerationData, const char* prefix, const char* postfix) {
+    if (function->isStatic) Append("static ")
+    appendVariableTypeCode(&function->returnType, codeGenerationData);
+    Append(" ")
+    Append(prefix)
+    Append(NString.get(&function->name))
+    Append(postfix)
+    Append("(")
+
+    int32_t parametersCount = NVector.size(&function->parameters);
+    for (int32_t i=0; i<parametersCount; i++) {
+        if (i) Append(", ")
+        struct VariableInfo* parameter = *(struct VariableInfo**) NVector.get(&function->parameters, i);
+        appendVariableTypeCode(&parameter->type, codeGenerationData);
+        Append(" ")
+        Append(NString.get(&parameter->name))
+    }
+
+    Append(")")
+}
+
+static void appendFunctionDeclarationCode(struct FunctionInfo* function, struct CodeGenerationData* codeGenerationData, const char* prefix, const char* postfix) {
+    appendFunctionHeadCode(function, codeGenerationData, prefix, postfix);
+    Append(";")
+}
+
 static void parseGlobalFunctionDeclaration(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
 
     struct FunctionInfo* newFunction = parseFunctionDeclaration(tree, codeGenerationData);
@@ -553,12 +579,20 @@ static void parseGlobalFunctionDeclaration(struct NCC_ASTNode* tree, struct Code
     struct FunctionInfo* existingFunction = getFunction(&codeGenerationData->functions, NString.get(&newFunction->name));
     if (!existingFunction) {
         NVector.pushBack(&codeGenerationData->functions, &newFunction);
+        appendFunctionDeclarationCode(newFunction, codeGenerationData, "", "");
         return ;
     }
 
     // If it's a duplicate, check if the signature changed,
     // TODO: allow polymorphism...
-    //sameSignature(...xxx)
+    if (!sameSignature(newFunction, existingFunction)) {
+        NERROR("CodeGeneration.parseGlobalFunctionDeclaration()", "Function redeclared with a different signature.");
+        return;
+    }
+
+    // Duplicate declaration. Append then destroy,
+    appendFunctionDeclarationCode(newFunction, codeGenerationData, "", "");
+    destroyAndDeleteFunctionInfo(newFunction);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
