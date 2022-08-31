@@ -11,6 +11,9 @@
 #include <NCC.h>
 #include <NSystemUtils.h>
 
+// TODO: (performance improvement) reduce pushing rules as much as possible (like paranthesis, commas and such, they are not useful). \
+         Remember to update code-generation to reflect changes...
+
 static boolean printListener(struct NCC_MatchingData* matchingData) {
     NLOGI("HelloCC", "ruleName: %s", NString.get(&matchingData->node.rule->ruleName));
     NLOGI("HelloCC", "        Match length: %s%d%s", NTCOLOR(HIGHLIGHT), matchingData->matchLength, NTCOLOR(STREAM_DEFAULT));
@@ -518,7 +521,7 @@ void defineLanguage(struct NCC* ncc) {
                                        "}^*"));
 
     // Function head,
-    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "function-head",
+    NCC_addRule   (pushingRuleData.set(&pushingRuleData, "function-head",
                                        "${declaration-specifiers} ${+ } "
                                        "${identifier} ${} "
                                        "${(} ${} ${parameter-list}|${ε} ${} ${)}"));

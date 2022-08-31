@@ -53,6 +53,7 @@ struct FunctionInfo {
     struct NString name;
     struct NVector parameters; // struct VariableInfo*.
     struct VariableType returnType;
+    struct NCC_ASTNode* body;
     boolean isStatic;
 };
 
@@ -68,9 +69,11 @@ struct ClassInfo {
 
 struct CodeGenerationData;
 
-static void generateCodeImplementation(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData);
 static boolean handleIgnorables(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData);
 static boolean handleIgnorablesSilently(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData);
+
+static void generateCodeImplementation(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData);
+static void parseCompoundStatement(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData);
 
 static void destroyAndDeleteFunctionInfo(struct FunctionInfo* functionInfo);
 static void destroyAndDeleteClassInfo(struct ClassInfo* classInfo);
@@ -94,6 +97,11 @@ struct CodeGenerationData {
     // Symbols,
     struct NVector classes;   // struct ClassInfo*
     struct NVector functions; // struct FunctionInfo*
+
+    // Context,
+    struct ClassInfo* currentClass;
+    struct FunctionInfo* currentFunction;
+    struct NVector scopeVariables; // struct NVector* (struct VariableInfo*)
 };
 
 static void initializeCodeGenerationData(struct CodeGenerationData* codeGenerationData) {
@@ -111,6 +119,11 @@ static void initializeCodeGenerationData(struct CodeGenerationData* codeGenerati
     // Symbols,
     NVector.initialize(&codeGenerationData->classes  , 0, sizeof(struct ClassInfo*));
     NVector.initialize(&codeGenerationData->functions, 0, sizeof(struct FunctionInfo*));
+
+    // Context,
+    codeGenerationData->currentClass = 0;
+    codeGenerationData->currentFunction = 0;
+    NVector.initialize(&codeGenerationData->scopeVariables, 0, sizeof(struct NVector*));
 }
 
 static void destroyCodeGenerationData(struct CodeGenerationData* codeGenerationData) {
@@ -128,6 +141,9 @@ static void destroyCodeGenerationData(struct CodeGenerationData* codeGenerationD
         destroyAndDeleteClassInfo(*(struct ClassInfo**) NVector.get(&codeGenerationData->classes, i));
     }
     NVector.destroy(&codeGenerationData->classes);
+
+    // Context,
+    NVector.destroy(&codeGenerationData->scopeVariables);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -472,6 +488,7 @@ static struct FunctionInfo* parseFunctionDeclaration(struct NCC_ASTNode* tree, s
 
     // Create function,
     struct FunctionInfo* newFunction = NMALLOC(sizeof(struct FunctionInfo), "CodeGeneration.parseFunctionDeclaration() newFunction");
+    newFunction->body = 0;
 
     // Parse storage class specifier (we only have static),
     if (Equals("static")) {
@@ -572,7 +589,8 @@ static void appendFunctionDeclarationCode(struct FunctionInfo* function, struct 
 
 static void parseGlobalFunctionDeclaration(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
 
-    struct FunctionInfo* newFunction = parseFunctionDeclaration(tree, codeGenerationData);
+    Begin
+    struct FunctionInfo* newFunction = parseFunctionDeclaration(currentChild, codeGenerationData);
     if (!newFunction) return;
 
     // If it's new, add it and return,
@@ -585,14 +603,55 @@ static void parseGlobalFunctionDeclaration(struct NCC_ASTNode* tree, struct Code
 
     // If it's a duplicate, check if the signature changed,
     // TODO: allow polymorphism...
-    if (!sameSignature(newFunction, existingFunction)) {
-        NERROR("CodeGeneration.parseGlobalFunctionDeclaration()", "Function redeclared with a different signature.");
-        return;
+    if (sameSignature(newFunction, existingFunction)) {
+        appendFunctionDeclarationCode(newFunction, codeGenerationData, "", "");
+    } else {
+        NERROR("CodeGeneration.parseGlobalFunctionDeclaration()", "Function %s%s%s redeclared with a different signature.", NTCOLOR(HIGHLIGHT), NString.get(&existingFunction->name), NTCOLOR(STREAM_DEFAULT));
+    }
+    destroyAndDeleteFunctionInfo(newFunction);
+}
+
+static void parseGlobalFunctionDefinition(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
+
+    Begin
+    struct FunctionInfo* newFunction = parseFunctionDeclaration(currentChild, codeGenerationData);
+    if (!newFunction) return;
+
+    // Look for an existing declaration,
+    struct FunctionInfo* existingFunction = getFunction(&codeGenerationData->functions, NString.get(&newFunction->name));
+    if (existingFunction) {
+
+        // If it's redefinition, throw,
+        if (existingFunction->body) {
+            NERROR("CodeGeneration.parseGlobalFunctionDefinition()", "Function %s%s%s redefinition.", NTCOLOR(HIGHLIGHT), NString.get(&existingFunction->name), NTCOLOR(STREAM_DEFAULT));
+            destroyAndDeleteFunctionInfo(newFunction);
+            return;
+        }
+
+        // Check if the signature changed,
+        // TODO: allow polymorphism...
+        if (!sameSignature(newFunction, existingFunction)) {
+            NERROR("CodeGeneration.parseGlobalFunctionDefinition()", "Function %s%s%s defined with a different signature.", NTCOLOR(HIGHLIGHT), NString.get(&existingFunction->name), NTCOLOR(STREAM_DEFAULT));
+            destroyAndDeleteFunctionInfo(newFunction);
+            return;
+        }
+    } else {
+        NVector.pushBack(&codeGenerationData->functions, &newFunction);
     }
 
-    // Duplicate declaration. Append then destroy,
-    appendFunctionDeclarationCode(newFunction, codeGenerationData, "", "");
-    destroyAndDeleteFunctionInfo(newFunction);
+    appendFunctionHeadCode(newFunction, codeGenerationData, "", "");
+    Append(" ")
+    codeGenerationData->indentationCount++;
+
+    // Parse function body,
+    NextChildSilently
+    newFunction->body = currentChild;
+    codeGenerationData->currentFunction = newFunction;
+    parseCompoundStatement(currentChild, codeGenerationData);
+    codeGenerationData->currentFunction = 0;
+
+    // Clean up,
+    if (existingFunction) destroyAndDeleteFunctionInfo(newFunction);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -700,6 +759,15 @@ static void parseClassDeclaration(struct NCC_ASTNode* tree, struct CodeGeneratio
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Statements
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+static void parseCompoundStatement(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
+    // ...xxx
+
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Generation loop
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -761,6 +829,8 @@ static void generateCodeImplementation(struct NCC_ASTNode* tree, struct CodeGene
         parseClassDeclaration(tree, codeGenerationData);
     } else if (NCString.equals(ruleNameCString, "function-declaration")) {
         parseGlobalFunctionDeclaration(tree, codeGenerationData);
+    } else if (NCString.equals(ruleNameCString, "function-definition")) {
+        parseGlobalFunctionDefinition(tree, codeGenerationData);
     } else {
         if (NVector.size(&tree->childNodes)) {
             proceedToChildren = True;
