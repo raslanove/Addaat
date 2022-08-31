@@ -70,7 +70,7 @@ struct ClassInfo {
 struct CodeGenerationData;
 
 static void generateCodeImplementation(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData);
-static void parseCompoundStatement(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData);
+static boolean parseCompoundStatement(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData);
 
 static void destroyAndDeleteFunctionInfo(struct FunctionInfo* functionInfo);
 static void destroyAndDeleteClassInfo(struct ClassInfo* classInfo);
@@ -399,7 +399,7 @@ static void appendVariableDeclarationCode(struct VariableInfo* variable, struct 
 
 static void destroyAndDeleteFunctionInfo(struct FunctionInfo* functionInfo) {
     NString.destroy(&functionInfo->name);
-    for (int32_t i= NVector.size(&functionInfo->parameters)-1; i>=0; i--) {
+    for (int32_t i=NVector.size(&functionInfo->parameters)-1; i>=0; i--) {
         destroyAndDeleteVariableInfo(*(struct VariableInfo**) NVector.get(&functionInfo->parameters, i));
     }
     NVector.destroy(&functionInfo->parameters);
@@ -737,9 +737,44 @@ static void parseClassDeclaration(struct NCC_ASTNode* tree, struct CodeGeneratio
 // Statements
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-static void parseCompoundStatement(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
+static boolean parseCompoundStatement(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
+
+    // compound-statement = ${OB} ${} ${block-item-list}|${ε} ${} ${CB}
+    // block-item = #{{declaration} {statement}}
+
+    boolean parsedSuccessfully = False;
+
+    // Create scope variables vector,
+    struct NVector* scopeVariables = NVector.create(0, sizeof(struct VariableInfo*));
+    NVector.pushBack(&codeGenerationData->scopeVariables, &scopeVariables);
+
+    Begin
+
+    // Skip {,
+    NextChild
+
+    // Parse block items,
+    while (!Equals("CB")) {
+
+        if (Equals("declaration")) {
+            if (!parseVariableDeclaration(currentChild, codeGenerationData, scopeVariables)) goto finish;
+
+            // TODO: pass static variables handler to parseVariableDeclaration()...
+            // TODO: static variables should be declared globally with a prefix...
+            // TODO: each scope should have a monotonically increasing number...
+
+        }
+    }
+
     // ...xxx
 
+    finish:
+    // Clean up,
+    NVector.popBack(&codeGenerationData->scopeVariables, &scopeVariables);
+    for (int32_t i=NVector.size(scopeVariables)-1; i>=0; i--) {
+        destroyAndDeleteVariableInfo(*(struct VariableInfo**) NVector.get(scopeVariables, i));
+    }
+    NVector.destroyAndFree(scopeVariables);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
