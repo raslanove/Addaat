@@ -69,9 +69,6 @@ struct ClassInfo {
 
 struct CodeGenerationData;
 
-static boolean handleIgnorables(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData);
-static boolean handleIgnorablesSilently(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData);
-
 static void generateCodeImplementation(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData);
 static void parseCompoundStatement(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData);
 
@@ -184,39 +181,17 @@ static void codeAppend(struct CodeGenerationData* codeGenerationData, const char
 // Parsing
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#define SkipIngorables \
-    while (True) { \
-        struct NCC_ASTNode** node = NVector.get(&tree->childNodes, currentChildIndex); \
-        if (!node) break; \
-        if (!handleIgnorables(*node, codeGenerationData)) break; \
-        currentChildIndex++; \
-    }
-
-#define SkipIngorablesSilently \
-    while (True) { \
-        struct NCC_ASTNode** node = NVector.get(&tree->childNodes, currentChildIndex); \
-        if (!node) break; \
-        if (!handleIgnorablesSilently(*node, codeGenerationData)) break; \
-        currentChildIndex++; \
-    }
-
 #define Begin \
     int32_t currentChildIndex = 0; \
-    SkipIngorablesSilently \
-    struct NCC_ASTNode* currentChild = *((struct NCC_ASTNode**) NVector.get(&tree->childNodes, currentChildIndex));
+    struct NCC_ASTNode* currentChild; \
+    { \
+        struct NCC_ASTNode** node = NVector.get(&tree->childNodes, 0); \
+        currentChild = node ? *node : 0; \
+    }
 
 #define NextChild \
     { \
         currentChildIndex++; \
-        SkipIngorables \
-        struct NCC_ASTNode** node = NVector.get(&tree->childNodes, currentChildIndex); \
-        currentChild = node ? *node : 0; \
-    }
-
-#define NextChildSilently \
-    { \
-        currentChildIndex++; \
-        SkipIngorablesSilently \
         struct NCC_ASTNode** node = NVector.get(&tree->childNodes, currentChildIndex); \
         currentChild = node ? *node : 0; \
     }
@@ -278,7 +253,7 @@ static struct VariableType* parseTypeSpecifier(struct NCC_ASTNode* tree, struct 
     Begin
     if (Equals("void")) {
         variableType->type = TYPE_VOID;
-        NextChildSilently
+        NextChild
         if (currentChild) {
             NERROR("parseTypeSpecifier()", "Can't make arrays of void type.");
             return 0;
@@ -294,11 +269,11 @@ static struct VariableType* parseTypeSpecifier(struct NCC_ASTNode* tree, struct 
         // TODO: enum and class...
     }
 
-    NextChildSilently
+    NextChild
     while(currentChild) {
         // Parse array specifier(s),
         variableType->arrayDepth++;
-        NextChildSilently
+        NextChild
     }
 
     return variableType;
@@ -353,7 +328,7 @@ static boolean parseVariableDeclaration(struct NCC_ASTNode* tree, struct CodeGen
     // Parse storage class specifier (we only have static),
     if (Equals("static")) {
         newVariable->isStatic = True;
-        NextChildSilently
+        NextChild
     } else {
         newVariable->isStatic = False;
     }
@@ -378,7 +353,7 @@ static boolean parseVariableDeclaration(struct NCC_ASTNode* tree, struct CodeGen
     NFREE(variableType, "CodeGeneration.parseVariableDeclaration() variableType 2");
 
     // Parse name and make sure it's not a redefinition,
-    NextChildSilently
+    NextChild
     if (getVariable(outputVector, VALUE)) {
         NERROR("parseVariableDeclaration()", "Variable redefinition: %s%s%s.", NTCOLOR(HIGHLIGHT), VALUE, NTCOLOR(STREAM_DEFAULT));
         NFREE( newVariable, "CodeGeneration.parseVariableDeclaration() newVariable 3");
@@ -388,11 +363,11 @@ static boolean parseVariableDeclaration(struct NCC_ASTNode* tree, struct CodeGen
     NVector.pushBack(outputVector, &newVariable);
 
     // Look for additional variables,
-    NextChildSilently
+    NextChild
     while (Equals(",")) {
 
         // Parse name and make sure it's not a redefinition,
-        NextChildSilently
+        NextChild
         if (getVariable(outputVector, VALUE)) {
             NERROR("parseVariableDeclaration()", "Variable redefinition: %s%s%s.", NTCOLOR(HIGHLIGHT), VALUE, NTCOLOR(STREAM_DEFAULT));
             return False;
@@ -403,7 +378,7 @@ static boolean parseVariableDeclaration(struct NCC_ASTNode* tree, struct CodeGen
         *anotherNewVariable = *newVariable;
         NString.initialize(&anotherNewVariable->name, "%s", VALUE);
         NVector.pushBack(outputVector, &anotherNewVariable);
-        NextChildSilently
+        NextChild
     }
 
     return True;
@@ -493,7 +468,7 @@ static struct FunctionInfo* parseFunctionDeclaration(struct NCC_ASTNode* tree, s
     // Parse storage class specifier (we only have static),
     if (Equals("static")) {
         newFunction->isStatic = True;
-        NextChildSilently
+        NextChild
     } else {
         newFunction->isStatic = False;
     }
@@ -510,15 +485,15 @@ static struct FunctionInfo* parseFunctionDeclaration(struct NCC_ASTNode* tree, s
     NFREE(returnType, "CodeGeneration.parseFunctionDeclaration() returnType");
 
     // Parse name,
-    NextChildSilently
+    NextChild
     NString.initialize(&newFunction->name, "%s", VALUE);
 
     // Skip open parenthesis,
-    NextChildSilently
+    NextChild
 
     // Parse parameter list,
     NVector.initialize(&newFunction->parameters, 0, sizeof(struct VariableInfo*));
-    NextChildSilently
+    NextChild
     while (!Equals(")")) {
 
         // Parse type specifier,
@@ -537,7 +512,7 @@ static struct FunctionInfo* parseFunctionDeclaration(struct NCC_ASTNode* tree, s
         }
 
         // Check for duplicates,
-        NextChildSilently
+        NextChild
         if (getVariable(&newFunction->parameters, VALUE)) {
             NERROR("parseFunctionDeclaration()", "Parameter redefinition: %s%s%s.", NTCOLOR(HIGHLIGHT), VALUE, NTCOLOR(STREAM_DEFAULT));
             NFREE(parameterType, "CodeGeneration.parseFunctionDeclaration() parameterType 2");
@@ -554,8 +529,8 @@ static struct FunctionInfo* parseFunctionDeclaration(struct NCC_ASTNode* tree, s
         NVector.pushBack(&newFunction->parameters, &newParameter);
 
         // Skip comma,
-        NextChildSilently
-        if (Equals(",")) NextChildSilently
+        NextChild
+        if (Equals(",")) NextChild
     }
 
     return newFunction;
@@ -644,7 +619,7 @@ static void parseGlobalFunctionDefinition(struct NCC_ASTNode* tree, struct CodeG
     codeGenerationData->indentationCount++;
 
     // Parse function body,
-    NextChildSilently
+    NextChild
     newFunction->body = currentChild;
     codeGenerationData->currentFunction = newFunction;
     parseCompoundStatement(currentChild, codeGenerationData);
@@ -693,7 +668,7 @@ static void parseClassDeclaration(struct NCC_ASTNode* tree, struct CodeGeneratio
     Begin
 
     // Skip the "class" keyword,
-    Append("struct");
+    Append("struct ");
     NextChild
 
     // Parse class name, if not and existing one, create new,
@@ -715,8 +690,8 @@ static void parseClassDeclaration(struct NCC_ASTNode* tree, struct CodeGeneratio
         return ;
     }
     class->defined = True;
-    Append("{")
-    NextChildSilently
+    Append(" {")
+    NextChild
     if (!Equals("CB")) Append("\n")
 
     // Parse declarations,
@@ -754,7 +729,7 @@ static void parseClassDeclaration(struct NCC_ASTNode* tree, struct CodeGeneratio
         // Parse variable declaration,
         if (!parseVariableDeclaration(currentChild, codeGenerationData, &class->members)) return;
 
-        NextChildSilently
+        NextChild
     }
 }
 
@@ -771,43 +746,6 @@ static void parseCompoundStatement(struct NCC_ASTNode* tree, struct CodeGenerati
 // Generation loop
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-static boolean handleIgnorables(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
-
-    if (!tree) return False;
-
-    const char* ruleNameCString = NString.get(&tree->name);
-    if        (NCString.equals(ruleNameCString, "insert space")) {
-        codeAppend(codeGenerationData, " ");
-    } else if (NCString.equals(ruleNameCString, "insert \n")) {
-        if (!NCString.endsWith(NString.get(&codeGenerationData->outString), "\n")) codeAppend(codeGenerationData, "\n");
-    } else if (NCString.equals(ruleNameCString, "insert \ns")) {
-        codeAppend(codeGenerationData, "\n");
-    } else if (NCString.equals(ruleNameCString, "line-cont")) {
-        codeAppend(codeGenerationData, " \\\n");
-    } else if (NCString.equals(ruleNameCString, "line-comment") || NCString.equals(ruleNameCString, "block-comment")) {
-        NVector.pushBack(&codeGenerationData->colorStack, &NTCOLOR(BLACK_BRIGHT));
-        codeAppend(codeGenerationData, NString.get(&tree->value));
-        const char *color; NVector.popBack(&codeGenerationData->colorStack, &color);
-    } else {
-        return False;
-    }
-    return True;
-}
-
-static boolean handleIgnorablesSilently(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
-
-    if (!tree) return False;
-
-    const char* ruleNameCString = NString.get(&tree->name);
-    return
-        NCString.equals(ruleNameCString, "insert space" ) ||
-        NCString.equals(ruleNameCString, "insert \n"    ) ||
-        NCString.equals(ruleNameCString, "insert \ns"   ) ||
-        NCString.equals(ruleNameCString, "line-cont"    ) ||
-        NCString.equals(ruleNameCString, "line-comment" ) ||
-        NCString.equals(ruleNameCString, "block-comment");
-}
-
 // K&R function definition style. See: https://stackoverflow.com/a/18820829/1942069
 //int foo(a,b) int a, b; {
 //}
@@ -815,11 +753,12 @@ static boolean handleIgnorablesSilently(struct NCC_ASTNode* tree, struct CodeGen
 static void generateCodeImplementation(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
     // Moved the implementation to a separate function to remove the codeGenerationData from the interface.
 
+    // TODO: get rid of this function eventually...
+
     const char* ruleNameCString = NString.get(&tree->name);
 
     boolean proceedToChildren = False;
-    if (handleIgnorables(tree, codeGenerationData)) {
-    } else if (NCString.equals(ruleNameCString, "OB")) {
+    if (NCString.equals(ruleNameCString, "OB")) {
         codeAppend(codeGenerationData, "{");
         codeGenerationData->indentationCount++;
     } else if (NCString.equals(ruleNameCString, "CB")) {
