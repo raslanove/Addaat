@@ -115,8 +115,14 @@ void NMain() {
 //               "    float e, f;\n"           \
 //               "}");
 
+//    test(&ncc, "void main() {\n"
+//               "    printf(\"besm Allah\\n\");\n"
+//               "}");
+
     test(&ncc, "void main() {\n"
-               "    printf(\"besm Allah\\n\");\n"
+               "    int a, b, d;\n"
+               "    static int c;\n"
+               "    {}\n"
                "}");
 
 //    test(&ncc, "void main();");

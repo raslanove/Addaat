@@ -72,6 +72,8 @@ struct CodeGenerationData;
 static void generateCodeImplementation(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData);
 static boolean parseCompoundStatement(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData);
 
+static void destroyAndDeleteVariableInfo(struct VariableInfo* variableInfo);
+static void destroyAndDeleteVariableInfos(struct NVector* variableInfosVector);
 static void destroyAndDeleteFunctionInfo(struct FunctionInfo* functionInfo);
 static void destroyAndDeleteClassInfo(struct ClassInfo* classInfo);
 
@@ -92,13 +94,15 @@ struct CodeGenerationData {
     int32_t indentationCount;
 
     // Symbols,
-    struct NVector classes;   // struct ClassInfo*
-    struct NVector functions; // struct FunctionInfo*
+    struct NVector globalVariables; // struct VariableInfo*
+    struct NVector functions;       // struct FunctionInfo*
+    struct NVector classes;         // struct ClassInfo*
 
     // Context,
     struct ClassInfo* currentClass;
     struct FunctionInfo* currentFunction;
     struct NVector scopeVariables; // struct NVector* (struct VariableInfo*)
+    int32_t scopesCount;
 };
 
 static void initializeCodeGenerationData(struct CodeGenerationData* codeGenerationData) {
@@ -114,18 +118,24 @@ static void initializeCodeGenerationData(struct CodeGenerationData* codeGenerati
     codeGenerationData->indentationCount = 0;
 
     // Symbols,
-    NVector.initialize(&codeGenerationData->classes  , 0, sizeof(struct ClassInfo*));
-    NVector.initialize(&codeGenerationData->functions, 0, sizeof(struct FunctionInfo*));
+    NVector.initialize(&codeGenerationData->globalVariables, 0, sizeof(struct VariableInfo*));
+    NVector.initialize(&codeGenerationData->functions      , 0, sizeof(struct FunctionInfo*));
+    NVector.initialize(&codeGenerationData->classes        , 0, sizeof(struct ClassInfo   *));
 
     // Context,
     codeGenerationData->currentClass = 0;
     codeGenerationData->currentFunction = 0;
     NVector.initialize(&codeGenerationData->scopeVariables, 0, sizeof(struct NVector*));
+    codeGenerationData->scopesCount = 0;
 }
 
 static void destroyCodeGenerationData(struct CodeGenerationData* codeGenerationData) {
     NString.destroy(&codeGenerationData->outString);
     NVector.destroy(&codeGenerationData->colorStack);
+
+    // Global variables,
+    destroyAndDeleteVariableInfos(&codeGenerationData->globalVariables);
+    NVector.destroy(&codeGenerationData->globalVariables);
 
     // Functions,
     for (int32_t i=NVector.size(&codeGenerationData->functions)-1; i>=0; i--) {
@@ -196,6 +206,7 @@ static void codeAppend(struct CodeGenerationData* codeGenerationData, const char
         currentChild = node ? *node : 0; \
     }
 
+#define NAME  NString.get(&currentChild->name )
 #define VALUE NString.get(&currentChild->value)
 
 #define Equals(text) \
@@ -211,6 +222,14 @@ static void codeAppend(struct CodeGenerationData* codeGenerationData, const char
 static void destroyAndDeleteVariableInfo(struct VariableInfo* variableInfo) {
     NString.destroy(&variableInfo->name);
     NFREE(variableInfo, "CodeGeneration.destroyAndDeleteVariableInfo() variableInfo");
+}
+
+static void destroyAndDeleteVariableInfos(struct NVector* variableInfosVector) {
+    for (int32_t i=NVector.size(variableInfosVector)-1; i>=0; i--) {
+        struct VariableInfo** variableInfo = NVector.get(variableInfosVector, i);
+        if (*variableInfo) destroyAndDeleteVariableInfo(*variableInfo);
+    }
+    NVector.clear(variableInfosVector);
 }
 
 static struct VariableInfo* getVariable(struct NVector* variables, const char* variableName) {
@@ -296,6 +315,13 @@ static void appendVariableTypeCode(struct VariableType* type, struct CodeGenerat
     for (int32_t i=0; i<type->arrayDepth; i++) Append("*")
 }
 
+static struct VariableInfo* cloneVariable(struct VariableInfo* variableToClone, const char* newName) {
+    struct VariableInfo* newVariable = NMALLOC(sizeof(struct VariableInfo), "CodeGeneration.cloneVariable() newVariable");
+    *newVariable = *variableToClone;
+    NString.initialize(&newVariable->name, "%s", newName);
+    return newVariable;
+}
+
 static boolean parseVariableDeclaration(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData, struct NVector* outputVector) {
 
     // declaration: static int[][] c, d;
@@ -374,9 +400,7 @@ static boolean parseVariableDeclaration(struct NCC_ASTNode* tree, struct CodeGen
         }
 
         // Create a new variable that's a copy of the first one but with a different name,
-        struct VariableInfo* anotherNewVariable = NMALLOC(sizeof(struct VariableInfo), "CodeGeneration.parseVariableDeclaration() anotherNewVariable");
-        *anotherNewVariable = *newVariable;
-        NString.initialize(&anotherNewVariable->name, "%s", VALUE);
+        struct VariableInfo* anotherNewVariable = cloneVariable(newVariable, VALUE);
         NVector.pushBack(outputVector, &anotherNewVariable);
         NextChild
     }
@@ -399,9 +423,7 @@ static void appendVariableDeclarationCode(struct VariableInfo* variable, struct 
 
 static void destroyAndDeleteFunctionInfo(struct FunctionInfo* functionInfo) {
     NString.destroy(&functionInfo->name);
-    for (int32_t i=NVector.size(&functionInfo->parameters)-1; i>=0; i--) {
-        destroyAndDeleteVariableInfo(*(struct VariableInfo**) NVector.get(&functionInfo->parameters, i));
-    }
+    destroyAndDeleteVariableInfos(&functionInfo->parameters);
     NVector.destroy(&functionInfo->parameters);
     NFREE(functionInfo, "CodeGeneration.destroyAndDeleteFunctionInfo() functionInfo");
 }
@@ -616,7 +638,6 @@ static void parseGlobalFunctionDefinition(struct NCC_ASTNode* tree, struct CodeG
 
     appendFunctionHeadCode(newFunction, codeGenerationData, "", "");
     Append(" ")
-    codeGenerationData->indentationCount++;
 
     // Parse function body,
     NextChild
@@ -645,9 +666,7 @@ static struct ClassInfo* createClass(struct CodeGenerationData* codeGenerationDa
 
 static void destroyAndDeleteClassInfo(struct ClassInfo* classInfo) {
     NString.destroy(&classInfo->name);
-    for (int32_t i=NVector.size(&classInfo->members)-1; i>=0; i--) {
-        destroyAndDeleteVariableInfo(*(struct VariableInfo **) NVector.get(&classInfo->members, i));
-    }
+    destroyAndDeleteVariableInfos(&classInfo->members);
     NVector.destroy(&classInfo->members);
     NFREE(classInfo, "CodeGeneration.destroyAndDeleteClassInfo() classInfo");
 }
@@ -737,12 +756,29 @@ static void parseClassDeclaration(struct NCC_ASTNode* tree, struct CodeGeneratio
 // Statements
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+static boolean parseStatement(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
+
+    // statement = #{   {labeled-statement}
+    //                 {compound-statement}
+    //               {expression-statement}
+    //                {selection-statement}
+    //                {iteration-statement}
+    //                     {jump-statement}}
+
+    // ...xxx
+
+    Begin
+    NLOGE("sdf", "Found: %s", NAME);
+    return True;
+}
+
 static boolean parseCompoundStatement(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
 
     // compound-statement = ${OB} ${} ${block-item-list}|${ε} ${} ${CB}
     // block-item = #{{declaration} {statement}}
 
     boolean parsedSuccessfully = False;
+    int32_t scopeID = ++(codeGenerationData->scopesCount);
 
     // Create scope variables vector,
     struct NVector* scopeVariables = NVector.create(0, sizeof(struct VariableInfo*));
@@ -751,30 +787,73 @@ static boolean parseCompoundStatement(struct NCC_ASTNode* tree, struct CodeGener
     Begin
 
     // Skip {,
+    Append("{")
     NextChild
+    if (!Equals("CB")) Append("\n")
+    codeGenerationData->indentationCount++;
 
     // Parse block items,
+    struct NVector* newVariables = NVector.create(0, sizeof(struct VariableInfo*));
     while (!Equals("CB")) {
 
         if (Equals("declaration")) {
-            if (!parseVariableDeclaration(currentChild, codeGenerationData, scopeVariables)) goto finish;
+            if (!parseVariableDeclaration(currentChild, codeGenerationData, newVariables)) goto finish;
 
-            // TODO: pass static variables handler to parseVariableDeclaration()...
-            // TODO: static variables should be declared globally with a prefix...
-            // TODO: each scope should have a monotonically increasing number...
+            // Process newly declared variables,
+            int32_t variablesCount = NVector.size(newVariables);
+            for (int32_t i=0; i<variablesCount; i++) {
+                struct VariableInfo** newLocalVariablePtr = NVector.get(newVariables, i);
+                struct VariableInfo* newLocalVariable = *newLocalVariablePtr;
 
+                // Check duplicates within this scope,
+                if (getVariable(scopeVariables, NString.get(&newLocalVariable->name))) {
+                    NERROR("CodeGeneration.parseCompoundStatement()", "Variable redefinition: %s%s%s.", NTCOLOR(HIGHLIGHT), NString.get(&newLocalVariable->name), NTCOLOR(STREAM_DEFAULT));
+                    goto finish;
+                }
+
+                // Add to local variables,
+                NVector.pushBack(scopeVariables, &newLocalVariable);
+                *newLocalVariablePtr = 0;
+
+                // Statics are also declared globally,
+                if (newLocalVariable->isStatic) {
+                    struct NString* globalVersionName = NString.create("_scope%d_%s_", scopeID, NString.get(&newLocalVariable->name));
+                    struct VariableInfo* globalVersion = cloneVariable(newLocalVariable, NString.get(globalVersionName));
+                    NString.destroyAndFree(globalVersionName);
+                    NVector.pushBack(&codeGenerationData->globalVariables, &globalVersion);
+                } else {
+                    appendVariableDeclarationCode(newLocalVariable, codeGenerationData, "", "");
+                    Append("\n")
+                }
+            }
+            NVector.clear(newVariables);
+
+        } else if (Equals("statement")) {
+            if (!parseStatement(currentChild, codeGenerationData)) goto finish;
+        } else {
+            NERROR("CodeGeneration.parseCompoundStatement()", "Unreachable code. Found a %s%s%s.", NTCOLOR(HIGHLIGHT), VALUE, NTCOLOR(STREAM_DEFAULT));
+            goto finish;
         }
+
+        NextChild
     }
 
-    // ...xxx
+    codeGenerationData->indentationCount--;
+    Append("}\n")
+    parsedSuccessfully = True;
 
     finish:
+
     // Clean up,
+    destroyAndDeleteVariableInfos(newVariables);
+    NVector.destroyAndFree(newVariables);
+
+    // Delete scope variables (we'll just leave the static ones be),
     NVector.popBack(&codeGenerationData->scopeVariables, &scopeVariables);
-    for (int32_t i=NVector.size(scopeVariables)-1; i>=0; i--) {
-        destroyAndDeleteVariableInfo(*(struct VariableInfo**) NVector.get(scopeVariables, i));
-    }
+    destroyAndDeleteVariableInfos(scopeVariables);
     NVector.destroyAndFree(scopeVariables);
+
+    return parsedSuccessfully;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -824,9 +903,28 @@ void generateCode(struct NCC_ASTNode* tree, struct NString* outString) {
 
     // TODO: Update class-specifier rule to set a new listener ?
 
+    // Generate code,
     struct CodeGenerationData codeGenerationData;
     initializeCodeGenerationData(&codeGenerationData);
     generateCodeImplementation(tree, &codeGenerationData);
+
+    // Copy generated code onto output,
     NString.set(outString, "%s", NString.get(&codeGenerationData.outString));
+
+    // Generate global variables code,
+    NString.set(&codeGenerationData.outString, "");
+    int32_t globalVariablesCount = NVector.size(&codeGenerationData.globalVariables);
+    for (int32_t i=0; i<globalVariablesCount; i++) {
+        struct VariableInfo* variable = *(struct VariableInfo**) NVector.get(&codeGenerationData.globalVariables, i);
+        appendVariableDeclarationCode(variable, &codeGenerationData, "", "");
+        codeAppend(&codeGenerationData, "\n");
+    }
+    if (globalVariablesCount) codeAppend(&codeGenerationData, "\n");
+
+    // Prepend to the rest of the code,
+    NString.append(&codeGenerationData.outString, "%s", NString.get(outString));
+    NString.set(outString, "%s", NString.get(&codeGenerationData.outString));
+
+    // Set output and clean up,
     destroyCodeGenerationData(&codeGenerationData);
 }
