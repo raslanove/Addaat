@@ -102,7 +102,7 @@ void defineLanguage(struct NCC* ncc) {
     NCC_addRule(pushingRuleData.set(&pushingRuleData,              "]",              "]"));
     NCC_addRule(pushingRuleData.set(&pushingRuleData,             "OB",            "\\{"));
     NCC_addRule(pushingRuleData.set(&pushingRuleData,             "CB",            "\\}"));
-    NCC_addRule(pushingRuleData.set(&pushingRuleData,              ":",              ":"));
+    NCC_addRule(  plainRuleData.set(&  plainRuleData,              ":",              ":"));
     NCC_addRule(pushingRuleData.set(&pushingRuleData,              ";",              ";"));
     NCC_addRule(pushingRuleData.set(&pushingRuleData,              "?",              "?"));
     NCC_addRule(pushingRuleData.set(&pushingRuleData,              ",",              ","));

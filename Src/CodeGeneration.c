@@ -70,6 +70,7 @@ struct ClassInfo {
 struct CodeGenerationData;
 
 static void generateCodeImplementation(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData);
+static boolean parseStatement(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData);
 static boolean parseCompoundStatement(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData);
 
 static void destroyAndDeleteVariableInfo(struct VariableInfo* variableInfo);
@@ -756,22 +757,6 @@ static void parseClassDeclaration(struct NCC_ASTNode* tree, struct CodeGeneratio
 // Statements
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-static boolean parseStatement(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
-
-    // statement = #{   {labeled-statement}
-    //                 {compound-statement}
-    //               {expression-statement}
-    //                {selection-statement}
-    //                {iteration-statement}
-    //                     {jump-statement}}
-
-    // ...xxx
-
-    Begin
-    NLOGE("sdf", "Found: %s", NAME);
-    return True;
-}
-
 static boolean parseCompoundStatement(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
 
     // compound-statement = ${OB} ${} ${block-item-list}|${ε} ${} ${CB}
@@ -854,6 +839,80 @@ static boolean parseCompoundStatement(struct NCC_ASTNode* tree, struct CodeGener
     NVector.destroyAndFree(scopeVariables);
 
     return parsedSuccessfully;
+}
+
+static boolean parseLabeledStatement(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
+
+    // labeled-statement =
+    //                 {${identifier}                      ${} ${:} ${} ${statement}} |
+    //                 {${case} ${} ${constant-expression} ${} ${:} ${} ${statement}} |
+    //                 {${default}                         ${} ${:} ${} ${statement}}
+
+    Begin
+
+    if (Equals("case")) {
+        Append("case ")
+        NextChild
+    }
+
+    Append(VALUE)
+    Append(": ")
+    NextChild
+
+    return parseStatement(currentChild, codeGenerationData);
+}
+
+static boolean parseJumpStatement(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
+
+    // jump-statement =
+    //              { ${goto}     ${} ${identifier}      ${} ${;} } |
+    //              { ${continue} ${}                        ${;} } |
+    //              { ${break}    ${}                        ${;} } |
+    //              { ${return}   ${} ${expression}|${ε} ${} ${;} }
+
+    Begin
+
+    Append(VALUE)
+    NextChild
+
+    if (Equals("expression")) {
+        Append(" ")
+        // TODO: return parseExpreession ....xxx
+    } else if (Equals("identifier")) {
+        Append(" ")
+        Append(VALUE)
+    }
+
+    Append(";\n")
+
+    return True;
+}
+
+static boolean parseStatement(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
+
+    // statement = #{   {labeled-statement}
+    //                 {compound-statement}
+    //               {expression-statement}
+    //                {selection-statement}
+    //                {iteration-statement}
+    //                     {jump-statement}}
+
+    Begin
+
+    if (Equals("compound-statement")) {
+        return parseCompoundStatement(currentChild, codeGenerationData);
+    } else if (Equals("labeled-statement")) {
+        return parseLabeledStatement(currentChild, codeGenerationData);
+    } else if (Equals("jump-statement")) {
+        return parseJumpStatement(currentChild, codeGenerationData);
+
+        // ...xxx
+    } else {
+
+        NLOGE("sdf", "Found: %s", NAME);
+    }
+
+    return True;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -122,7 +122,11 @@ void NMain() {
     test(&ncc, "void main() {\n"
                "    int a, b, d;\n"
                "    static int c;\n"
-               "    {}\n"
+               "    {\n"
+               "        int a;\n"
+               "        static int c;\n"
+               "    }\n"
+               "finish: return;\n"
                "}");
 
 //    test(&ncc, "void main();");
