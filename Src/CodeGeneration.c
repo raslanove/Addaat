@@ -463,29 +463,17 @@ static boolean sameSignature(struct FunctionInfo* function1, struct FunctionInfo
     return sameParameters(function1, function2);
 }
 
-static struct FunctionInfo* parseFunctionDeclaration(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
+static struct FunctionInfo* parseFunctionHead(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
 
-    // function-declaration: void main();
-    // ├─type-specifier: void
-    // │ └─void: void
-    // │
-    // ├─insert space:
-    // ├─identifier: main
-    // │ └─identifier-content: main
-    // │
-    // ├─(: (
-    // ├─): )
-    // ├─;: ;
-    // └─insert \n:
-
-    // ${declaration-specifiers} ${+ }
-    // ${identifier} ${}
-    // ${(} ${} ${parameter-list}|${ε} ${} ${)} ${} ${;} ${+\n}
+    // function-head =
+    //             ${declaration-specifiers} ${}
+    //             ${identifier} ${}
+    //             ${(} ${} ${parameter-list}|${ε} ${} ${)}
 
     Begin
 
     // Create function,
-    struct FunctionInfo* newFunction = NMALLOC(sizeof(struct FunctionInfo), "CodeGeneration.parseFunctionDeclaration() newFunction");
+    struct FunctionInfo* newFunction = NMALLOC(sizeof(struct FunctionInfo), "CodeGeneration.parseFunctionHead() newFunction");
     newFunction->body = 0;
 
     // Parse storage class specifier (we only have static),
@@ -499,25 +487,22 @@ static struct FunctionInfo* parseFunctionDeclaration(struct NCC_ASTNode* tree, s
     // Parse type specifier,
     struct VariableType* returnType = parseTypeSpecifier(currentChild, codeGenerationData);
     if (!returnType) {
-        NFREE(newFunction, "CodeGeneration.parseFunctionDeclaration() newFunction");
+        NFREE(newFunction, "CodeGeneration.parseFunctionHead() newFunction");
         return 0;
     }
 
     // Assign type,
     newFunction->returnType = *returnType;
-    NFREE(returnType, "CodeGeneration.parseFunctionDeclaration() returnType");
+    NFREE(returnType, "CodeGeneration.parseFunctionHead() returnType");
 
     // Parse name,
     NextChild
     NString.initialize(&newFunction->name, "%s", VALUE);
 
-    // Skip open parenthesis,
-    NextChild
-
     // Parse parameter list,
     NVector.initialize(&newFunction->parameters, 0, sizeof(struct VariableInfo*));
     NextChild
-    while (!Equals(")")) {
+    while (currentChild) {
 
         // Parse type specifier,
         struct VariableType* parameterType = parseTypeSpecifier(currentChild, codeGenerationData);
@@ -528,8 +513,8 @@ static struct FunctionInfo* parseFunctionDeclaration(struct NCC_ASTNode* tree, s
 
         // Check for voids,
         if (parameterType->type == TYPE_VOID) {
-            NERROR("parseFunctionDeclaration()", "Void is not a valid parameter type.");
-            NFREE(parameterType, "CodeGeneration.parseFunctionDeclaration() parameterType 1");
+            NERROR("parseFunctionHead()", "Void is not a valid parameter type.");
+            NFREE(parameterType, "CodeGeneration.parseFunctionHead() parameterType 1");
             destroyAndDeleteFunctionInfo(newFunction);
             return 0;
         }
@@ -537,18 +522,18 @@ static struct FunctionInfo* parseFunctionDeclaration(struct NCC_ASTNode* tree, s
         // Check for duplicates,
         NextChild
         if (getVariable(&newFunction->parameters, VALUE)) {
-            NERROR("parseFunctionDeclaration()", "Parameter redefinition: %s%s%s.", NTCOLOR(HIGHLIGHT), VALUE, NTCOLOR(STREAM_DEFAULT));
-            NFREE(parameterType, "CodeGeneration.parseFunctionDeclaration() parameterType 2");
+            NERROR("parseFunctionHead()", "Parameter redefinition: %s%s%s.", NTCOLOR(HIGHLIGHT), VALUE, NTCOLOR(STREAM_DEFAULT));
+            NFREE(parameterType, "CodeGeneration.parseFunctionHead() parameterType 2");
             destroyAndDeleteFunctionInfo(newFunction);
             return 0;
         }
 
         // Create a new parameter,
-        struct VariableInfo* newParameter = NMALLOC(sizeof(struct VariableInfo), "CodeGeneration.parseFunctionDeclaration() newParameter");
+        struct VariableInfo* newParameter = NMALLOC(sizeof(struct VariableInfo), "CodeGeneration.parseFunctionHead() newParameter");
         NString.initialize(&newParameter->name, "%s", VALUE);
         newParameter->isStatic = False;
         newParameter->type = *parameterType;
-        NFREE(parameterType, "CodeGeneration.parseFunctionDeclaration() parameterType 3");
+        NFREE(parameterType, "CodeGeneration.parseFunctionHead() parameterType 3");
         NVector.pushBack(&newFunction->parameters, &newParameter);
 
         // Skip comma,
@@ -588,7 +573,7 @@ static void appendFunctionDeclarationCode(struct FunctionInfo* function, struct 
 static void parseGlobalFunctionDeclaration(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
 
     Begin
-    struct FunctionInfo* newFunction = parseFunctionDeclaration(currentChild, codeGenerationData);
+    struct FunctionInfo* newFunction = parseFunctionHead(currentChild, codeGenerationData);
     if (!newFunction) return;
 
     // If it's new, add it and return,
@@ -612,7 +597,7 @@ static void parseGlobalFunctionDeclaration(struct NCC_ASTNode* tree, struct Code
 static void parseGlobalFunctionDefinition(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
 
     Begin
-    struct FunctionInfo* newFunction = parseFunctionDeclaration(currentChild, codeGenerationData);
+    struct FunctionInfo* newFunction = parseFunctionHead(currentChild, codeGenerationData);
     if (!newFunction) return;
 
     // Look for an existing declaration,
@@ -767,6 +752,27 @@ static boolean parseExpression(struct NCC_ASTNode* tree, struct CodeGenerationDa
 // Statements
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+static boolean parseLabeledStatement(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
+
+    // labeled-statement =
+    //                 {${identifier}                      ${} ${:} ${} ${statement}} |
+    //                 {${case} ${} ${constant-expression} ${} ${:} ${} ${statement}} |
+    //                 {${default}                         ${} ${:} ${} ${statement}}
+
+    Begin
+
+    if (Equals("case")) {
+        Append("case ")
+        NextChild
+    }
+
+    Append(VALUE)
+    Append(": ")
+    NextChild
+
+    return parseStatement(currentChild, codeGenerationData);
+}
+
 static boolean parseCompoundStatement(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
 
     // compound-statement = ${OB} ${} ${block-item-list}|${ε} ${} ${CB}
@@ -851,25 +857,25 @@ static boolean parseCompoundStatement(struct NCC_ASTNode* tree, struct CodeGener
     return parsedSuccessfully;
 }
 
-static boolean parseLabeledStatement(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
+static boolean parseExpressionStatement(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
 
-    // labeled-statement =
-    //                 {${identifier}                      ${} ${:} ${} ${statement}} |
-    //                 {${case} ${} ${constant-expression} ${} ${:} ${} ${statement}} |
-    //                 {${default}                         ${} ${:} ${} ${statement}}
+    // expression-statement = ${expression}|${ε} ${} ${;}
+
+    Begin
+    boolean success = parseExpression(currentChild, codeGenerationData);
+    Append(";\n")
+    return success;
+}
+
+static boolean parseSelectionStatement(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
+
+    // selection-statement =
+    //                   { ${if}     ${} ${(} ${} ${expression} ${} ${)} ${} ${statement} {${} ${else} ${} ${statement}}|${ε} }
+    //                   { ${switch} ${} ${(} ${} ${expression} ${} ${)} ${} ${statement}                                     }
 
     Begin
 
-    if (Equals("case")) {
-        Append("case ")
-        NextChild
-    }
-
-    Append(VALUE)
-    Append(": ")
-    NextChild
-
-    return parseStatement(currentChild, codeGenerationData);
+    return True;
 }
 
 static boolean parseJumpStatement(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
@@ -898,16 +904,6 @@ static boolean parseJumpStatement(struct NCC_ASTNode* tree, struct CodeGeneratio
     return True;
 }
 
-static boolean parseExpressionStatement(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
-
-    // expression-statement = ${expression}|${ε} ${} ${;}
-
-    Begin
-    boolean success = parseExpression(currentChild, codeGenerationData);
-    Append(";\n")
-    return success;
-}
-
 static boolean parseStatement(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
 
     // statement = #{   {labeled-statement}
@@ -925,6 +921,8 @@ static boolean parseStatement(struct NCC_ASTNode* tree, struct CodeGenerationDat
         return parseCompoundStatement(currentChild, codeGenerationData);
     } else if (Equals("expression-statement")) {
         return parseExpressionStatement(currentChild, codeGenerationData);
+    } else if (Equals("selection-statement")) {
+        return parseSelectionStatement(currentChild, codeGenerationData);
 
         // ...xxx
 

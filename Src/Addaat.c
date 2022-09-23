@@ -125,17 +125,15 @@ void NMain() {
                "    {\n"
                "        int a;\n"
                "        static int c;\n"
-               "        insideScope:;"
+               "        insideScope:;\n"
                "    }\n"
-               "    goto insideScope;"
-               "finish: return;\n"
+               "    goto insideScope;\n"
+               "    finish: return;\n"
                "}");
 
 //    test(&ncc, "void main();");
 
     #endif
-
-
 
     // Clean up,
     NCC_destroyNCC(&ncc);
