@@ -754,6 +754,16 @@ static void parseClassDeclaration(struct NCC_ASTNode* tree, struct CodeGeneratio
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Expression
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+static boolean parseExpression(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
+
+    // TODO: ...xxx
+    return True;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Statements
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -877,7 +887,7 @@ static boolean parseJumpStatement(struct NCC_ASTNode* tree, struct CodeGeneratio
 
     if (Equals("expression")) {
         Append(" ")
-        // TODO: return parseExpreession ....xxx
+        if (!parseExpression(currentChild, codeGenerationData)) return False;
     } else if (Equals("identifier")) {
         Append(" ")
         Append(VALUE)
@@ -886,6 +896,16 @@ static boolean parseJumpStatement(struct NCC_ASTNode* tree, struct CodeGeneratio
     Append(";\n")
 
     return True;
+}
+
+static boolean parseExpressionStatement(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
+
+    // expression-statement = ${expression}|${ε} ${} ${;}
+
+    Begin
+    boolean success = parseExpression(currentChild, codeGenerationData);
+    Append(";\n")
+    return success;
 }
 
 static boolean parseStatement(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
@@ -899,16 +919,18 @@ static boolean parseStatement(struct NCC_ASTNode* tree, struct CodeGenerationDat
 
     Begin
 
-    if (Equals("compound-statement")) {
-        return parseCompoundStatement(currentChild, codeGenerationData);
-    } else if (Equals("labeled-statement")) {
+    if (Equals("labeled-statement")) {
         return parseLabeledStatement(currentChild, codeGenerationData);
-    } else if (Equals("jump-statement")) {
-        return parseJumpStatement(currentChild, codeGenerationData);
+    } else if (Equals("compound-statement")) {
+        return parseCompoundStatement(currentChild, codeGenerationData);
+    } else if (Equals("expression-statement")) {
+        return parseExpressionStatement(currentChild, codeGenerationData);
 
         // ...xxx
-    } else {
 
+    } else if (Equals("jump-statement")) {
+        return parseJumpStatement(currentChild, codeGenerationData);
+    } else {
         NLOGE("sdf", "Found: %s", NAME);
     }
 

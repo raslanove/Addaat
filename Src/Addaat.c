@@ -125,7 +125,9 @@ void NMain() {
                "    {\n"
                "        int a;\n"
                "        static int c;\n"
+               "        insideScope:;"
                "    }\n"
+               "    goto insideScope;"
                "finish: return;\n"
                "}");
 
