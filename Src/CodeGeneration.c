@@ -911,18 +911,16 @@ static boolean parseIterationStatement(struct NCC_ASTNode* tree, struct CodeGene
     //                   { ${for}   ${} ${(} ${} ${declaration}              ${} ${expression}|${ε} ${} ${;} ${} ${expression}|${ε} ${} ${)} ${} ${;}|{${} ${statement}} }
 
     Begin
-    Append(VALUE)
-    Append(" (")
 
     if (Equals("while")) {
 
+        Append("while (")
         NextChild
         if (!parseExpression(currentChild, codeGenerationData)) return False;
 
-        NextChild
-
         // Note: parsing statement alone should be enough (since a ; is an expression statement),
         //       but we don't want to append a space when it's only a semi-colon,
+        NextChild
         boolean isStatementEmpty=False;
         struct NCC_ASTNode* statementNode = *(struct NCC_ASTNode**) NVector.get(&currentChild->childNodes, 0);
         if (NCString.equals(NString.get(&statementNode->name), "expression-statement")) {
@@ -936,11 +934,18 @@ static boolean parseIterationStatement(struct NCC_ASTNode* tree, struct CodeGene
             Append(") ");
             return parseStatement(currentChild, codeGenerationData);
         }
-        return True;
 
     } else if (Equals("do")) {
 
-        //....xxx
+        Append("do ")
+        NextChild
+        if (!parseStatement(currentChild, codeGenerationData)) return False;
+
+        Append("while (")
+        NextChild
+        if (!parseExpression(currentChild, codeGenerationData)) return False;
+        Append(");\n")
+
     } else if (Equals("for")) {
 
         //....xxx
