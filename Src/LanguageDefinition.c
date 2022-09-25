@@ -470,10 +470,10 @@ void defineLanguage(struct NCC* ncc) {
 
     // Iteration statement,
     NCC_updateRule(pushingRuleData.set(&pushingRuleData, "iteration-statement",
-                                       "{ ${while} ${}                           ${(} ${} ${expression} ${} ${)} ${} ${;}|{${} ${statement}} } | "
-                                       "{ ${do}    ${} ${statement} ${} ${while} ${(} ${} ${expression} ${} ${)} ${} ${;}                      } | "
-                                       "{ ${for}   ${} ${(} ${} ${expression}|${ε} ${} ${;} ${} ${expression}|${ε} ${} ${;} ${} ${expression}|${ε} ${} ${)} ${} ${;}|{${} ${statement}} } | "
-                                       "{ ${for}   ${} ${(} ${} ${declaration}              ${} ${expression}|${ε} ${} ${;} ${} ${expression}|${ε} ${} ${)} ${} ${;}|{${} ${statement}} }"));
+                                       "{ ${while} ${}                           ${(} ${} ${expression} ${} ${)} ${} ${statement} } | "
+                                       "{ ${do}    ${} ${statement} ${} ${while} ${(} ${} ${expression} ${} ${)} ${} ${;}       } | "
+                                       "{ ${for}   ${} ${(} ${} ${expression}|${ε} ${} ${;} ${} ${expression}|${ε} ${} ${;} ${} ${expression}|${ε} ${} ${)} ${} ${statement} } | "
+                                       "{ ${for}   ${} ${(} ${} ${declaration}              ${} ${expression}|${ε} ${} ${;} ${} ${expression}|${ε} ${} ${)} ${} ${statement} }"));
 
     // Jump statement,
     NCC_updateRule(pushingRuleData.set(&pushingRuleData, "jump-statement",

@@ -128,6 +128,12 @@ void NMain() {
                "        insideScope:;\n"
                "    }\n"
                "    goto insideScope;\n"
+               "    if (1) {\n"
+               "        printf(\"True\");\n"
+               "    } else {\n"
+               "        printf(\"False\");\n"
+               "    }\n"
+               "    while(1);\n"
                "    finish: return;\n"
                "}");
 

@@ -290,7 +290,7 @@ static struct VariableType* parseTypeSpecifier(struct NCC_ASTNode* tree, struct 
     }
 
     NextChild
-    while(currentChild) {
+    while (currentChild) {
         // Parse array specifier(s),
         variableType->arrayDepth++;
         NextChild
@@ -875,6 +875,77 @@ static boolean parseSelectionStatement(struct NCC_ASTNode* tree, struct CodeGene
 
     Begin
 
+    Append(VALUE)
+    Append(" (")
+    NextChild
+
+    if (!parseExpression(currentChild, codeGenerationData)) return False;
+    NextChild
+
+    Append(") ")
+    if (!parseStatement(currentChild, codeGenerationData)) return False;
+    NextChild
+
+    // If no else,
+    if (!currentChild) return True;
+
+    // Remove the newline if a compound statement came before the else,
+    if (NCString.endsWith(NString.get(&codeGenerationData->outString), "}\n")) {
+        NString.trimEnd(&codeGenerationData->outString, "\n");
+        Append(" else ")
+    } else {
+        Append("else ")
+    }
+    NextChild
+
+    // Parse the else statement,
+    return parseStatement(currentChild, codeGenerationData);
+}
+
+static boolean parseIterationStatement(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
+
+    // iteration-statement =
+    //                   { ${while} ${}                           ${(} ${} ${expression} ${} ${)} ${} ${;}|{${} ${statement}} } |
+    //                   { ${do}    ${} ${statement} ${} ${while} ${(} ${} ${expression} ${} ${)} ${} ${;}                    } |
+    //                   { ${for}   ${} ${(} ${} ${expression}|${ε} ${} ${;} ${} ${expression}|${ε} ${} ${;} ${} ${expression}|${ε} ${} ${)} ${} ${;}|{${} ${statement}} } |
+    //                   { ${for}   ${} ${(} ${} ${declaration}              ${} ${expression}|${ε} ${} ${;} ${} ${expression}|${ε} ${} ${)} ${} ${;}|{${} ${statement}} }
+
+    Begin
+    Append(VALUE)
+    Append(" (")
+
+    if (Equals("while")) {
+
+        NextChild
+        if (!parseExpression(currentChild, codeGenerationData)) return False;
+
+        NextChild
+
+        // Note: parsing statement alone should be enough (since a ; is an expression statement),
+        //       but we don't want to append a space when it's only a semi-colon,
+        boolean isStatementEmpty=False;
+        struct NCC_ASTNode* statementNode = *(struct NCC_ASTNode**) NVector.get(&currentChild->childNodes, 0);
+        if (NCString.equals(NString.get(&statementNode->name), "expression-statement")) {
+            struct NCC_ASTNode* firstChildNode = *(struct NCC_ASTNode**) NVector.get(&statementNode->childNodes, 0);
+            isStatementEmpty = NCString.equals(NString.get(&firstChildNode->name), ";");
+        }
+
+        if (isStatementEmpty) {
+            Append(");\n")
+        } else {
+            Append(") ");
+            return parseStatement(currentChild, codeGenerationData);
+        }
+        return True;
+
+    } else if (Equals("do")) {
+
+        //....xxx
+    } else if (Equals("for")) {
+
+        //....xxx
+    }
+
     return True;
 }
 
@@ -915,24 +986,22 @@ static boolean parseStatement(struct NCC_ASTNode* tree, struct CodeGenerationDat
 
     Begin
 
+    boolean success=False;
     if (Equals("labeled-statement")) {
-        return parseLabeledStatement(currentChild, codeGenerationData);
+        success = parseLabeledStatement(currentChild, codeGenerationData);
     } else if (Equals("compound-statement")) {
-        return parseCompoundStatement(currentChild, codeGenerationData);
+        success = parseCompoundStatement(currentChild, codeGenerationData);
     } else if (Equals("expression-statement")) {
-        return parseExpressionStatement(currentChild, codeGenerationData);
+        success = parseExpressionStatement(currentChild, codeGenerationData);
     } else if (Equals("selection-statement")) {
-        return parseSelectionStatement(currentChild, codeGenerationData);
-
-        // ...xxx
-
+        success = parseSelectionStatement(currentChild, codeGenerationData);
+    } else if (Equals("iteration-statement")) {
+        success = parseIterationStatement(currentChild, codeGenerationData);
     } else if (Equals("jump-statement")) {
-        return parseJumpStatement(currentChild, codeGenerationData);
-    } else {
-        NLOGE("sdf", "Found: %s", NAME);
+        success = parseJumpStatement(currentChild, codeGenerationData);
     }
 
-    return True;
+    return success;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
