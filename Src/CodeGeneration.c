@@ -49,6 +49,11 @@ struct VariableInfo {
     boolean isStatic;
 };
 
+struct Scope {
+    int32_t id;
+    struct NVector localVariables; // struct VariableInfo*.
+};
+
 struct FunctionInfo {
     struct NString name;
     struct NVector parameters; // struct VariableInfo*.
@@ -102,7 +107,7 @@ struct CodeGenerationData {
     // Context,
     struct ClassInfo* currentClass;
     struct FunctionInfo* currentFunction;
-    struct NVector scopeVariables; // struct NVector* (struct VariableInfo*)
+    struct NVector scopesStack; // struct Scope*
     int32_t scopesCount;
 };
 
@@ -126,7 +131,7 @@ static void initializeCodeGenerationData(struct CodeGenerationData* codeGenerati
     // Context,
     codeGenerationData->currentClass = 0;
     codeGenerationData->currentFunction = 0;
-    NVector.initialize(&codeGenerationData->scopeVariables, 0, sizeof(struct NVector*));
+    NVector.initialize(&codeGenerationData->scopesStack, 0, sizeof(struct Scope*));
     codeGenerationData->scopesCount = 0;
 }
 
@@ -151,7 +156,7 @@ static void destroyCodeGenerationData(struct CodeGenerationData* codeGenerationD
     NVector.destroy(&codeGenerationData->classes);
 
     // Context,
-    NVector.destroy(&codeGenerationData->scopeVariables);
+    NVector.destroy(&codeGenerationData->scopesStack);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -217,7 +222,42 @@ static void codeAppend(struct CodeGenerationData* codeGenerationData, const char
     codeAppend(codeGenerationData, text);
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Variable
+// Scopes
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+static struct Scope* pushNewScope(struct CodeGenerationData* codeGenerationData) {
+
+    // Create a new scope,
+    struct Scope* newScope = NMALLOC(sizeof(struct Scope), "CodeGeneration.pushNewScope() newScope");
+    newScope->id = ++(codeGenerationData->scopesCount);
+    NVector.initialize(&newScope->localVariables, 0, sizeof(struct VariableInfo*));
+
+    // Push to the stack,
+    NVector.pushBack(&codeGenerationData->scopesStack, &newScope);
+
+    return newScope;
+}
+
+static void popScope(struct CodeGenerationData* codeGenerationData) {
+
+    // Pop scope,
+    struct Scope* scope;
+    NVector.popBack(&codeGenerationData->scopesStack, &scope);
+
+    // Delete scope variables and scope,
+    destroyAndDeleteVariableInfos(&scope->localVariables);
+    NVector.destroy(&scope->localVariables);
+    NFREE(scope, "CodeGeneration.popScope() scope");
+}
+
+static struct Scope* getCurrentScope(struct CodeGenerationData* codeGenerationData) {
+    struct Scope** currentScope = NVector.getLast(&codeGenerationData->scopesStack);
+    if (currentScope) return *currentScope;
+    return 0;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Variables
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 static void destroyAndDeleteVariableInfo(struct VariableInfo* variableInfo) {
@@ -416,6 +456,55 @@ static void appendVariableDeclarationCode(struct VariableInfo* variable, struct 
     Append(NString.get(&variable->name))
     Append(postfix)
     Append(";")
+}
+
+static boolean parseLocalVariableDeclaration(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
+
+    boolean success=False;
+
+    // Parse the variable(s) into a temporary vector,
+    struct NVector* newVariables = NVector.create(0, sizeof(struct VariableInfo*));
+    if (!parseVariableDeclaration(tree, codeGenerationData, newVariables)) goto finish;
+
+    // Get the current scope,
+    struct Scope* scope = getCurrentScope(codeGenerationData);
+
+    // Process the newly declared variables and house them into the proper scopes,
+    int32_t variablesCount = NVector.size(newVariables);
+    for (int32_t i=0; i<variablesCount; i++) {
+        struct VariableInfo** newLocalVariablePtr = NVector.get(newVariables, i);
+        struct VariableInfo* newLocalVariable = *newLocalVariablePtr;
+
+        // Check duplicates within this scope,
+        if (getVariable(&scope->localVariables, NString.get(&newLocalVariable->name))) {
+            NERROR("CodeGeneration.parseCompoundStatement()", "Variable redefinition: %s%s%s.", NTCOLOR(HIGHLIGHT), NString.get(&newLocalVariable->name), NTCOLOR(STREAM_DEFAULT));
+            goto finish;
+        }
+
+        // Add to local variables,
+        NVector.pushBack(&scope->localVariables, &newLocalVariable);
+        *newLocalVariablePtr = 0;
+
+        // Statics are also declared globally,
+        if (newLocalVariable->isStatic) {
+            struct NString* globalVersionName = NString.create("_scope%d_%s_", scope->id, NString.get(&newLocalVariable->name));
+            struct VariableInfo* globalVersion = cloneVariable(newLocalVariable, NString.get(globalVersionName));
+            NString.destroyAndFree(globalVersionName);
+            NVector.pushBack(&codeGenerationData->globalVariables, &globalVersion);
+        } else {
+            appendVariableDeclarationCode(newLocalVariable, codeGenerationData, "", "");
+            Append("\n")
+        }
+    }
+    NVector.clear(newVariables);
+    success = True;
+
+    finish:
+
+    // Clean up,
+    destroyAndDeleteVariableInfos(newVariables);
+    NVector.destroyAndFree(newVariables);
+    return success;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -778,14 +867,10 @@ static boolean parseCompoundStatement(struct NCC_ASTNode* tree, struct CodeGener
     // compound-statement = ${OB} ${} ${block-item-list}|${ε} ${} ${CB}
     // block-item = #{{declaration} {statement}}
 
-    boolean parsedSuccessfully = False;
-    int32_t scopeID = ++(codeGenerationData->scopesCount);
-
-    // Create scope variables vector,
-    struct NVector* scopeVariables = NVector.create(0, sizeof(struct VariableInfo*));
-    NVector.pushBack(&codeGenerationData->scopeVariables, &scopeVariables);
-
     Begin
+
+    boolean parsedSuccessfully = False;
+    pushNewScope(codeGenerationData);
 
     // Skip {,
     Append("{")
@@ -794,41 +879,10 @@ static boolean parseCompoundStatement(struct NCC_ASTNode* tree, struct CodeGener
     codeGenerationData->indentationCount++;
 
     // Parse block items,
-    struct NVector* newVariables = NVector.create(0, sizeof(struct VariableInfo*));
     while (!Equals("CB")) {
 
         if (Equals("declaration")) {
-            if (!parseVariableDeclaration(currentChild, codeGenerationData, newVariables)) goto finish;
-
-            // Process newly declared variables,
-            int32_t variablesCount = NVector.size(newVariables);
-            for (int32_t i=0; i<variablesCount; i++) {
-                struct VariableInfo** newLocalVariablePtr = NVector.get(newVariables, i);
-                struct VariableInfo* newLocalVariable = *newLocalVariablePtr;
-
-                // Check duplicates within this scope,
-                if (getVariable(scopeVariables, NString.get(&newLocalVariable->name))) {
-                    NERROR("CodeGeneration.parseCompoundStatement()", "Variable redefinition: %s%s%s.", NTCOLOR(HIGHLIGHT), NString.get(&newLocalVariable->name), NTCOLOR(STREAM_DEFAULT));
-                    goto finish;
-                }
-
-                // Add to local variables,
-                NVector.pushBack(scopeVariables, &newLocalVariable);
-                *newLocalVariablePtr = 0;
-
-                // Statics are also declared globally,
-                if (newLocalVariable->isStatic) {
-                    struct NString* globalVersionName = NString.create("_scope%d_%s_", scopeID, NString.get(&newLocalVariable->name));
-                    struct VariableInfo* globalVersion = cloneVariable(newLocalVariable, NString.get(globalVersionName));
-                    NString.destroyAndFree(globalVersionName);
-                    NVector.pushBack(&codeGenerationData->globalVariables, &globalVersion);
-                } else {
-                    appendVariableDeclarationCode(newLocalVariable, codeGenerationData, "", "");
-                    Append("\n")
-                }
-            }
-            NVector.clear(newVariables);
-
+            if (!parseLocalVariableDeclaration(currentChild, codeGenerationData)) goto finish;
         } else if (Equals("statement")) {
             if (!parseStatement(currentChild, codeGenerationData)) goto finish;
         } else {
@@ -845,15 +899,8 @@ static boolean parseCompoundStatement(struct NCC_ASTNode* tree, struct CodeGener
 
     finish:
 
-    // Clean up,
-    destroyAndDeleteVariableInfos(newVariables);
-    NVector.destroyAndFree(newVariables);
-
-    // Delete scope variables (we'll just leave the static ones be),
-    NVector.popBack(&codeGenerationData->scopeVariables, &scopeVariables);
-    destroyAndDeleteVariableInfos(scopeVariables);
-    NVector.destroyAndFree(scopeVariables);
-
+    // Delete scope,
+    popScope(codeGenerationData);
     return parsedSuccessfully;
 }
 
@@ -905,14 +952,16 @@ static boolean parseSelectionStatement(struct NCC_ASTNode* tree, struct CodeGene
 static boolean parseIterationStatement(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
 
     // iteration-statement =
-    //                   { ${while} ${}                           ${(} ${} ${expression} ${} ${)} ${} ${;}|{${} ${statement}} } |
-    //                   { ${do}    ${} ${statement} ${} ${while} ${(} ${} ${expression} ${} ${)} ${} ${;}                    } |
-    //                   { ${for}   ${} ${(} ${} ${expression}|${ε} ${} ${;} ${} ${expression}|${ε} ${} ${;} ${} ${expression}|${ε} ${} ${)} ${} ${;}|{${} ${statement}} } |
-    //                   { ${for}   ${} ${(} ${} ${declaration}              ${} ${expression}|${ε} ${} ${;} ${} ${expression}|${ε} ${} ${)} ${} ${;}|{${} ${statement}} }
+    //                   { ${while} ${}                           ${(} ${} ${expression} ${} ${)} ${} ${statement} } |
+    //                   { ${do}    ${} ${statement} ${} ${while} ${(} ${} ${expression} ${} ${)} ${} ${;}         } |
+    //                   { ${for}   ${} ${(} ${} ${expression}|${ε} ${} ${;} ${} ${expression}|${ε} ${} ${;} ${} ${expression}|${ε} ${} ${)} ${} ${statement} } |
+    //                   { ${for}   ${} ${(} ${} ${declaration}              ${} ${expression}|${ε} ${} ${;} ${} ${expression}|${ε} ${} ${)} ${} ${statement} }
 
     Begin
 
     if (Equals("while")) {
+
+        // ${while} ${} ${(} ${} ${expression} ${} ${)} ${} ${statement}
 
         Append("while (")
         NextChild
@@ -934,8 +983,11 @@ static boolean parseIterationStatement(struct NCC_ASTNode* tree, struct CodeGene
             Append(") ");
             return parseStatement(currentChild, codeGenerationData);
         }
+        return True;
 
     } else if (Equals("do")) {
+
+        // ${do} ${} ${statement} ${} ${while} ${(} ${} ${expression} ${} ${)} ${} ${;}
 
         Append("do ")
         NextChild
@@ -944,14 +996,40 @@ static boolean parseIterationStatement(struct NCC_ASTNode* tree, struct CodeGene
         Append("while (")
         NextChild
         if (!parseExpression(currentChild, codeGenerationData)) return False;
+
         Append(");\n")
+        return True;
 
     } else if (Equals("for")) {
 
-        //....xxx
+        // ${for} ${} ${(} ${} ${expression}|${ε} ${} ${;} ${} ${expression}|${ε} ${} ${;} ${} ${expression}|${ε} ${} ${)} ${} ${statement}
+        // ${for} ${} ${(} ${} ${declaration}              ${} ${expression}|${ε} ${} ${;} ${} ${expression}|${ε} ${} ${)} ${} ${statement}
+
+        // TODO: push scope...xxx
+        boolean success=False;
+
+        Append("for (")
+        NextChild
+        if (Equals(";")) {
+            // Just skip,
+            NextChild
+        } else if (Equals("expression")) {
+            if (!parseExpression(currentChild, codeGenerationData)) goto forFinish;
+
+            // Skip the ;
+            NextChild
+        } else if (Equals("declaration")) {
+            // local ?
+            //if (!parseVariableDeclaration(currentChild, codeGenerationData, ...)) goto forFinish;
+        }
+
+        success = True;
+        forFinish:;
+        // TODO: pop scope...xxx
+        return success;
     }
 
-    return True;
+    return False; // Unreachable.
 }
 
 static boolean parseJumpStatement(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
