@@ -76,7 +76,7 @@ struct CodeGenerationData;
 
 static void generateCodeImplementation(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData);
 static boolean parseStatement(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData);
-static boolean parseCompoundStatement(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData);
+static boolean parseCompoundStatement(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData, struct NVector* predefinedLocalVariables);
 
 static void destroyAndDeleteVariableInfo(struct VariableInfo* variableInfo);
 static void destroyAndDeleteVariableInfos(struct NVector* variableInfosVector);
@@ -458,6 +458,35 @@ static void appendVariableDeclarationCode(struct VariableInfo* variable, struct 
     Append(";")
 }
 
+static boolean addLocalVariable(struct VariableInfo* newLocalVariable, struct CodeGenerationData* codeGenerationData) {
+
+    // Get the current scope,
+    struct Scope* scope = getCurrentScope(codeGenerationData);
+
+    // Check duplicates within this scope,
+    if (getVariable(&scope->localVariables, NString.get(&newLocalVariable->name))) {
+        NERROR("CodeGeneration.addLocalVariable()", "Variable redefinition: %s%s%s.", NTCOLOR(HIGHLIGHT), NString.get(&newLocalVariable->name), NTCOLOR(STREAM_DEFAULT));
+        return False;
+    }
+
+    // Add to local variables,
+    NVector.pushBack(&scope->localVariables, &newLocalVariable);
+
+    // Statics are also declared globally,
+    if (newLocalVariable->isStatic) {
+        // TODO: check for duplicates?
+        struct NString* globalVersionName = NString.create("_scope%d_%s_", scope->id, NString.get(&newLocalVariable->name));
+        struct VariableInfo* globalVersion = cloneVariable(newLocalVariable, NString.get(globalVersionName));
+        NString.destroyAndFree(globalVersionName);
+        NVector.pushBack(&codeGenerationData->globalVariables, &globalVersion);
+    } else {
+        appendVariableDeclarationCode(newLocalVariable, codeGenerationData, "", "");
+        Append("\n")
+    }
+
+    return True;
+}
+
 static boolean parseLocalVariableDeclaration(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
 
     boolean success=False;
@@ -466,35 +495,14 @@ static boolean parseLocalVariableDeclaration(struct NCC_ASTNode* tree, struct Co
     struct NVector* newVariables = NVector.create(0, sizeof(struct VariableInfo*));
     if (!parseVariableDeclaration(tree, codeGenerationData, newVariables)) goto finish;
 
-    // Get the current scope,
-    struct Scope* scope = getCurrentScope(codeGenerationData);
-
     // Process the newly declared variables and house them into the proper scopes,
     int32_t variablesCount = NVector.size(newVariables);
     for (int32_t i=0; i<variablesCount; i++) {
         struct VariableInfo** newLocalVariablePtr = NVector.get(newVariables, i);
         struct VariableInfo* newLocalVariable = *newLocalVariablePtr;
 
-        // Check duplicates within this scope,
-        if (getVariable(&scope->localVariables, NString.get(&newLocalVariable->name))) {
-            NERROR("CodeGeneration.parseCompoundStatement()", "Variable redefinition: %s%s%s.", NTCOLOR(HIGHLIGHT), NString.get(&newLocalVariable->name), NTCOLOR(STREAM_DEFAULT));
-            goto finish;
-        }
-
-        // Add to local variables,
-        NVector.pushBack(&scope->localVariables, &newLocalVariable);
+        if (!addLocalVariable(newLocalVariable, codeGenerationData)) goto finish;
         *newLocalVariablePtr = 0;
-
-        // Statics are also declared globally,
-        if (newLocalVariable->isStatic) {
-            struct NString* globalVersionName = NString.create("_scope%d_%s_", scope->id, NString.get(&newLocalVariable->name));
-            struct VariableInfo* globalVersion = cloneVariable(newLocalVariable, NString.get(globalVersionName));
-            NString.destroyAndFree(globalVersionName);
-            NVector.pushBack(&codeGenerationData->globalVariables, &globalVersion);
-        } else {
-            appendVariableDeclarationCode(newLocalVariable, codeGenerationData, "", "");
-            Append("\n")
-        }
     }
     NVector.clear(newVariables);
     success = True;
@@ -718,7 +726,7 @@ static void parseGlobalFunctionDefinition(struct NCC_ASTNode* tree, struct CodeG
     NextChild
     newFunction->body = currentChild;
     codeGenerationData->currentFunction = newFunction;
-    parseCompoundStatement(currentChild, codeGenerationData);
+    parseCompoundStatement(currentChild, codeGenerationData, &newFunction->parameters);
     codeGenerationData->currentFunction = 0;
 
     // Clean up,
@@ -862,7 +870,7 @@ static boolean parseLabeledStatement(struct NCC_ASTNode* tree, struct CodeGenera
     return parseStatement(currentChild, codeGenerationData);
 }
 
-static boolean parseCompoundStatement(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
+static boolean parseCompoundStatement(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData, struct NVector* predefinedLocalVariables) {
 
     // compound-statement = ${OB} ${} ${block-item-list}|${ε} ${} ${CB}
     // block-item = #{{declaration} {statement}}
@@ -870,7 +878,15 @@ static boolean parseCompoundStatement(struct NCC_ASTNode* tree, struct CodeGener
     Begin
 
     boolean parsedSuccessfully = False;
+
+    // Create a new scope and load it with existing local variables (if any),
     pushNewScope(codeGenerationData);
+    if (predefinedLocalVariables) {
+        int32_t predefinedLocalVariablesCount = NVector.size(predefinedLocalVariables);
+        for (int32_t i=0; i<predefinedLocalVariablesCount; i++) {
+            addLocalVariable(*(struct VariableInfo**) NVector.get(predefinedLocalVariables, i), codeGenerationData);
+        }
+    }
 
     // Skip {,
     Append("{")
@@ -967,6 +983,7 @@ static boolean parseIterationStatement(struct NCC_ASTNode* tree, struct CodeGene
         NextChild
         if (!parseExpression(currentChild, codeGenerationData)) return False;
 
+        // TODO: turn into a function to check empty statements...
         // Note: parsing statement alone should be enough (since a ; is an expression statement),
         //       but we don't want to append a space when it's only a semi-colon,
         NextChild
@@ -1005,27 +1022,54 @@ static boolean parseIterationStatement(struct NCC_ASTNode* tree, struct CodeGene
         // ${for} ${} ${(} ${} ${expression}|${ε} ${} ${;} ${} ${expression}|${ε} ${} ${;} ${} ${expression}|${ε} ${} ${)} ${} ${statement}
         // ${for} ${} ${(} ${} ${declaration}              ${} ${expression}|${ε} ${} ${;} ${} ${expression}|${ε} ${} ${)} ${} ${statement}
 
-        // TODO: push scope...xxx
         boolean success=False;
+        pushNewScope(codeGenerationData);
 
         Append("for (")
         NextChild
         if (Equals(";")) {
             // Just skip,
             NextChild
+            Append(";")
         } else if (Equals("expression")) {
             if (!parseExpression(currentChild, codeGenerationData)) goto forFinish;
 
             // Skip the ;
             NextChild
+            Append(";")
         } else if (Equals("declaration")) {
-            // local ?
-            //if (!parseVariableDeclaration(currentChild, codeGenerationData, ...)) goto forFinish;
+            if (!parseLocalVariableDeclaration(currentChild, codeGenerationData)) goto forFinish;
+            NextChild
+            NString.trimEnd(&codeGenerationData->outString, "\n");
         }
 
+        // Now parse the condition expression (if any),
+        if (Equals("expression")) {
+            Append(" ")
+            if (!parseExpression(currentChild, codeGenerationData)) goto forFinish;
+            NextChild
+        }
+
+        // Skip the ;
+        NextChild
+        Append(";")
+
+        // Then parse the increment expression (if any),
+        if (Equals("expression")) {
+            Append(" ")
+            if (!parseExpression(currentChild, codeGenerationData)) goto forFinish;
+            NextChild
+        }
+
+        // TODO: handle space depending on the statement being empty or not....
+        Append(") ")
+
+        // Finally, parse the statement,
+        if (!parseStatement(currentChild, codeGenerationData)) goto forFinish;
+
         success = True;
-        forFinish:;
-        // TODO: pop scope...xxx
+        forFinish:
+        popScope(codeGenerationData);
         return success;
     }
 
@@ -1073,7 +1117,7 @@ static boolean parseStatement(struct NCC_ASTNode* tree, struct CodeGenerationDat
     if (Equals("labeled-statement")) {
         success = parseLabeledStatement(currentChild, codeGenerationData);
     } else if (Equals("compound-statement")) {
-        success = parseCompoundStatement(currentChild, codeGenerationData);
+        success = parseCompoundStatement(currentChild, codeGenerationData, 0);
     } else if (Equals("expression-statement")) {
         success = parseExpressionStatement(currentChild, codeGenerationData);
     } else if (Equals("selection-statement")) {

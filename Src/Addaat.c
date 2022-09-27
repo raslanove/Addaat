@@ -134,7 +134,8 @@ void NMain() {
                "        printf(\"False\");\n"
                "    }\n"
                "    while(1);\n"
-               "    do;while(1);"
+               "    do;while(1);\n"
+               "    for (int i; i<100; i++);\n"
                "    finish: return;\n"
                "}");
 

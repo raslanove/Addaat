@@ -349,6 +349,7 @@ void defineLanguage(struct NCC* ncc) {
     // Declaration,
     NCC_addRule   (  plainRuleData.set(&  plainRuleData, "declaration-specifiers", "STUB!"));
     NCC_addRule   (  plainRuleData.set(&  plainRuleData, "identifier-list", "STUB!"));
+    // TODO: add initialization support...
     NCC_addRule   (pushingRuleData.set(&pushingRuleData, "declaration",
                                        "${declaration-specifiers} ${} ${identifier-list} ${} ${;}"));
 
