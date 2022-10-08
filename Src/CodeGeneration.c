@@ -849,6 +849,16 @@ static boolean parseExpression(struct NCC_ASTNode* tree, struct CodeGenerationDa
 // Statements
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+static boolean isStatementEmpty(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
+
+    struct NCC_ASTNode* statementNode = *(struct NCC_ASTNode**) NVector.get(&tree->childNodes, 0);
+    if (NCString.equals(NString.get(&statementNode->name), "expression-statement")) {
+        struct NCC_ASTNode* firstChildNode = *(struct NCC_ASTNode**) NVector.get(&statementNode->childNodes, 0);
+        return NCString.equals(NString.get(&firstChildNode->name), ";");
+    }
+    return False;
+}
+
 static boolean parseLabeledStatement(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
 
     // labeled-statement =
@@ -983,19 +993,11 @@ static boolean parseIterationStatement(struct NCC_ASTNode* tree, struct CodeGene
         NextChild
         if (!parseExpression(currentChild, codeGenerationData)) return False;
 
-        // TODO: turn into a function to check empty statements...
-        // Note: parsing statement alone should be enough (since a ; is an expression statement),
-        //       but we don't want to append a space when it's only a semi-colon,
         NextChild
-        boolean isStatementEmpty=False;
-        struct NCC_ASTNode* statementNode = *(struct NCC_ASTNode**) NVector.get(&currentChild->childNodes, 0);
-        if (NCString.equals(NString.get(&statementNode->name), "expression-statement")) {
-            struct NCC_ASTNode* firstChildNode = *(struct NCC_ASTNode**) NVector.get(&statementNode->childNodes, 0);
-            isStatementEmpty = NCString.equals(NString.get(&firstChildNode->name), ";");
-        }
 
-        if (isStatementEmpty) {
+        if (isStatementEmpty(currentChild, codeGenerationData)) {
             Append(");\n")
+            NLOGE("sdf", "EMPTYYYYTY");
         } else {
             Append(") ");
             return parseStatement(currentChild, codeGenerationData);
@@ -1061,11 +1063,13 @@ static boolean parseIterationStatement(struct NCC_ASTNode* tree, struct CodeGene
             NextChild
         }
 
-        // TODO: handle space depending on the statement being empty or not....
-        Append(") ")
-
-        // Finally, parse the statement,
-        if (!parseStatement(currentChild, codeGenerationData)) goto forFinish;
+        if (isStatementEmpty(currentChild, codeGenerationData)) {
+            Append(");\n")
+        } else {
+            Append(") ")
+            // Parse the statement,
+            if (!parseStatement(currentChild, codeGenerationData)) goto forFinish;
+        }
 
         success = True;
         forFinish:
