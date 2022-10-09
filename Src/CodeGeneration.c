@@ -74,7 +74,6 @@ struct ClassInfo {
 
 struct CodeGenerationData;
 
-static void generateCodeImplementation(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData);
 static boolean parseStatement(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData);
 static boolean parseCompoundStatement(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData, struct NVector* predefinedLocalVariables);
 
@@ -363,7 +362,7 @@ static struct VariableInfo* cloneVariable(struct VariableInfo* variableToClone, 
     return newVariable;
 }
 
-static boolean parseVariableDeclaration(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData, struct NVector* outputVector) {
+static boolean parseVariableDeclaration(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData, struct NVector* outputVector, boolean allowDuplicates) {
 
     // declaration: static int[][] c, d;
     // ├─static: static
@@ -421,7 +420,9 @@ static boolean parseVariableDeclaration(struct NCC_ASTNode* tree, struct CodeGen
 
     // Parse name and make sure it's not a redefinition,
     NextChild
-    if (getVariable(outputVector, VALUE)) {
+    struct VariableInfo* existingVariable = getVariable(outputVector, VALUE);
+    if (existingVariable &&
+        (!allowDuplicates || !typesEqual(&newVariable->type, &existingVariable->type))) {
         NERROR("parseVariableDeclaration()", "Variable redefinition: %s%s%s.", NTCOLOR(HIGHLIGHT), VALUE, NTCOLOR(STREAM_DEFAULT));
         NFREE( newVariable, "CodeGeneration.parseVariableDeclaration() newVariable 3");
         return False;
@@ -435,7 +436,9 @@ static boolean parseVariableDeclaration(struct NCC_ASTNode* tree, struct CodeGen
 
         // Parse name and make sure it's not a redefinition,
         NextChild
-        if (getVariable(outputVector, VALUE)) {
+        existingVariable = getVariable(outputVector, VALUE);
+        if (existingVariable &&
+            (!allowDuplicates || !typesEqual(&newVariable->type, &existingVariable->type))) {
             NERROR("parseVariableDeclaration()", "Variable redefinition: %s%s%s.", NTCOLOR(HIGHLIGHT), VALUE, NTCOLOR(STREAM_DEFAULT));
             return False;
         }
@@ -493,7 +496,7 @@ static boolean parseLocalVariableDeclaration(struct NCC_ASTNode* tree, struct Co
 
     // Parse the variable(s) into a temporary vector,
     struct NVector* newVariables = NVector.create(0, sizeof(struct VariableInfo*));
-    if (!parseVariableDeclaration(tree, codeGenerationData, newVariables)) goto finish;
+    if (!parseVariableDeclaration(tree, codeGenerationData, newVariables, False)) goto finish;
 
     // Process the newly declared variables and house them into the proper scopes,
     int32_t variablesCount = NVector.size(newVariables);
@@ -667,35 +670,38 @@ static void appendFunctionDeclarationCode(struct FunctionInfo* function, struct 
     Append(";")
 }
 
-static void parseGlobalFunctionDeclaration(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
+static boolean parseGlobalFunctionDeclaration(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
 
     Begin
     struct FunctionInfo* newFunction = parseFunctionHead(currentChild, codeGenerationData);
-    if (!newFunction) return;
+    if (!newFunction) return False;
 
     // If it's new, add it and return,
     struct FunctionInfo* existingFunction = getFunction(&codeGenerationData->functions, NString.get(&newFunction->name));
     if (!existingFunction) {
         NVector.pushBack(&codeGenerationData->functions, &newFunction);
         appendFunctionDeclarationCode(newFunction, codeGenerationData, "", "");
-        return ;
+        return True;
     }
 
     // If it's a duplicate, check if the signature changed,
     // TODO: allow polymorphism...
-    if (sameSignature(newFunction, existingFunction)) {
+    boolean duplicate = sameSignature(newFunction, existingFunction);
+    if (duplicate) {
         appendFunctionDeclarationCode(newFunction, codeGenerationData, "", "");
     } else {
         NERROR("CodeGeneration.parseGlobalFunctionDeclaration()", "Function %s%s%s redeclared with a different signature.", NTCOLOR(HIGHLIGHT), NString.get(&existingFunction->name), NTCOLOR(STREAM_DEFAULT));
     }
     destroyAndDeleteFunctionInfo(newFunction);
+
+    return duplicate;
 }
 
-static void parseGlobalFunctionDefinition(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
+static boolean parseGlobalFunctionDefinition(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
 
     Begin
     struct FunctionInfo* newFunction = parseFunctionHead(currentChild, codeGenerationData);
-    if (!newFunction) return;
+    if (!newFunction) return False;
 
     // Look for an existing declaration,
     struct FunctionInfo* existingFunction = getFunction(&codeGenerationData->functions, NString.get(&newFunction->name));
@@ -705,7 +711,7 @@ static void parseGlobalFunctionDefinition(struct NCC_ASTNode* tree, struct CodeG
         if (existingFunction->body) {
             NERROR("CodeGeneration.parseGlobalFunctionDefinition()", "Function %s%s%s redefinition.", NTCOLOR(HIGHLIGHT), NString.get(&existingFunction->name), NTCOLOR(STREAM_DEFAULT));
             destroyAndDeleteFunctionInfo(newFunction);
-            return;
+            return False;
         }
 
         // Check if the signature changed,
@@ -713,7 +719,7 @@ static void parseGlobalFunctionDefinition(struct NCC_ASTNode* tree, struct CodeG
         if (!sameSignature(newFunction, existingFunction)) {
             NERROR("CodeGeneration.parseGlobalFunctionDefinition()", "Function %s%s%s defined with a different signature.", NTCOLOR(HIGHLIGHT), NString.get(&existingFunction->name), NTCOLOR(STREAM_DEFAULT));
             destroyAndDeleteFunctionInfo(newFunction);
-            return;
+            return False;
         }
     } else {
         NVector.pushBack(&codeGenerationData->functions, &newFunction);
@@ -726,11 +732,13 @@ static void parseGlobalFunctionDefinition(struct NCC_ASTNode* tree, struct CodeG
     NextChild
     newFunction->body = currentChild;
     codeGenerationData->currentFunction = newFunction;
-    parseCompoundStatement(currentChild, codeGenerationData, &newFunction->parameters);
+    boolean success = parseCompoundStatement(currentChild, codeGenerationData, &newFunction->parameters);
     codeGenerationData->currentFunction = 0;
 
     // Clean up,
     if (existingFunction) destroyAndDeleteFunctionInfo(newFunction);
+
+    return success;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -762,7 +770,7 @@ static struct ClassInfo* getClass(struct CodeGenerationData* codeGenerationData,
     return 0;
 }
 
-static void parseClassDeclaration(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
+static boolean parseClassDeclaration(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
 
     // ${class} ${+ } ${identifier}
     //   {${} ${;} ${+\n}} |
@@ -783,13 +791,13 @@ static void parseClassDeclaration(struct NCC_ASTNode* tree, struct CodeGeneratio
     // Return if semi-colon found (forward-declaration),
     if (Equals(";")) {
         Append(";")
-        return;
+        return True;
     }
 
     // Skip open bracket,
     if (class->defined) {
         NERROR("parseClassSpecifier()", "Class redefinition.");
-        return ;
+        return False;
     }
     class->defined = True;
     Append(" {")
@@ -825,11 +833,11 @@ static void parseClassDeclaration(struct NCC_ASTNode* tree, struct CodeGeneratio
             }
             NString.destroy(&prefix);
 
-            return;
+            return True;
         }
 
         // Parse variable declaration,
-        if (!parseVariableDeclaration(currentChild, codeGenerationData, &class->members)) return;
+        if (!parseVariableDeclaration(currentChild, codeGenerationData, &class->members, False)) return False;
 
         NextChild
     }
@@ -997,7 +1005,6 @@ static boolean parseIterationStatement(struct NCC_ASTNode* tree, struct CodeGene
 
         if (isStatementEmpty(currentChild, codeGenerationData)) {
             Append(");\n")
-            NLOGE("sdf", "EMPTYYYYTY");
         } else {
             Append(") ");
             return parseStatement(currentChild, codeGenerationData);
@@ -1136,56 +1143,68 @@ static boolean parseStatement(struct NCC_ASTNode* tree, struct CodeGenerationDat
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Generation loop
+// Translation unit
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // K&R function definition style. See: https://stackoverflow.com/a/18820829/1942069
 //int foo(a,b) int a, b; {
 //}
 
-static void generateCodeImplementation(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
-    // Moved the implementation to a separate function to remove the codeGenerationData from the interface.
+static boolean parseExternalDeclaration(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
 
-    // TODO: get rid of this function eventually...
+    // external-declaration = #{{function-declaration}
+    //                          {function-definition}
+    //                          {declaration}
+    //                          {class-declaration}}
 
-    const char* ruleNameCString = NString.get(&tree->name);
-
-    boolean proceedToChildren = False;
-    if (NCString.equals(ruleNameCString, "OB")) {
-        codeAppend(codeGenerationData, "{");
-        codeGenerationData->indentationCount++;
-    } else if (NCString.equals(ruleNameCString, "CB")) {
-        codeGenerationData->indentationCount--;
-        codeAppend(codeGenerationData, "}");
-    } else if (NCString.equals(ruleNameCString, "class-declaration")) {
-        parseClassDeclaration(tree, codeGenerationData);
-    } else if (NCString.equals(ruleNameCString, "function-declaration")) {
-        parseGlobalFunctionDeclaration(tree, codeGenerationData);
-    } else if (NCString.equals(ruleNameCString, "function-definition")) {
-        parseGlobalFunctionDefinition(tree, codeGenerationData);
-    } else {
-        if (NVector.size(&tree->childNodes)) {
-            proceedToChildren = True;
-        } else {
-            // Leaf node,
-            codeAppend(codeGenerationData, NString.get(&tree->value));
-        }
+    Begin
+    boolean parsedSuccessfully = False;
+    if (Equals("function-declaration")) {
+        parsedSuccessfully = parseGlobalFunctionDeclaration(currentChild, codeGenerationData);
+    } else if (Equals("function-definition")) {
+        parsedSuccessfully = parseGlobalFunctionDefinition(currentChild, codeGenerationData);
+    } else if (Equals("declaration")) {
+        parsedSuccessfully = parseVariableDeclaration(currentChild, codeGenerationData, &codeGenerationData->globalVariables, True);
+    } else if (Equals("class-declaration")) {
+        parsedSuccessfully = parseClassDeclaration(currentChild, codeGenerationData);
     }
 
-    if (!proceedToChildren) return;
-    // Not a leaf, print children,
-    int32_t childrenCount = NVector.size(&tree->childNodes);
-    for (int32_t i=0; i<childrenCount; i++) generateCodeImplementation(*((struct NCC_ASTNode**) NVector.get(&tree->childNodes, i)), codeGenerationData);
+    return parsedSuccessfully;
 }
 
-void generateCode(struct NCC_ASTNode* tree, struct NString* outString) {
+static boolean parseTranslationUnit(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
+
+    // translation-unit =
+    //                 ${} ${external-declaration} {{
+    //                     ${} ${external-declaration}
+    //                 }^*} ${}
+
+    // We have to check because this gets called from outside,
+    if (!NCString.equals(NString.get(&tree->name), "translation-unit")) {
+        NERROR("CodeGeneration.parseTranslationUnit()", "Expecting translation unit, found: %s%s%s.", NTCOLOR(HIGHLIGHT), NString.get(&tree->name), NTCOLOR(STREAM_DEFAULT));
+        return False;
+    }
+
+    Begin
+
+    while (currentChild) {
+        if (!parseExternalDeclaration(currentChild, codeGenerationData)) return False;
+        NextChild
+    }
+
+    return True;
+}
+
+boolean generateCode(struct NCC_ASTNode* tree, struct NString* outString) {
 
     // TODO: Update class-specifier rule to set a new listener ?
 
     // Generate code,
+    boolean codeGeneratedSuccessfully = False;
     struct CodeGenerationData codeGenerationData;
     initializeCodeGenerationData(&codeGenerationData);
-    generateCodeImplementation(tree, &codeGenerationData);
+    if (!parseTranslationUnit(tree, &codeGenerationData)) goto finish;
+    codeGeneratedSuccessfully = True;
 
     // Copy generated code onto output,
     NString.set(outString, "%s", NString.get(&codeGenerationData.outString));
@@ -1204,6 +1223,7 @@ void generateCode(struct NCC_ASTNode* tree, struct NString* outString) {
     NString.append(&codeGenerationData.outString, "%s", NString.get(outString));
     NString.set(outString, "%s", NString.get(&codeGenerationData.outString));
 
-    // Set output and clean up,
+    finish:
     destroyCodeGenerationData(&codeGenerationData);
+    return codeGeneratedSuccessfully;
 }

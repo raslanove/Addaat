@@ -119,7 +119,9 @@ void NMain() {
 //               "    printf(\"besm Allah\\n\");\n"
 //               "}");
 
-    test(&ncc, "void main() {\n"
+    test(&ncc, "int a;\n"
+               "int a;\n"
+               "void main() {\n"
                "    int a, b, d;\n"
                "    static int c;\n"
                "    {\n"

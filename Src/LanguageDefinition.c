@@ -498,7 +498,7 @@ void defineLanguage(struct NCC* ncc) {
     // External declaration,
     NCC_addRule   (  plainRuleData.set(&  plainRuleData, "function-declaration", "STUB!"));
     NCC_addRule   (  plainRuleData.set(&  plainRuleData, "function-definition", "STUB!"));
-    NCC_updateRule(  plainRuleData.set(&  plainRuleData, "external-declaration",
+    NCC_updateRule(pushingRuleData.set(&pushingRuleData, "external-declaration",
                                        "#{{function-declaration} {function-definition} {declaration} {class-declaration}}"));
 
     // Parameter declaration,
@@ -525,31 +525,8 @@ void defineLanguage(struct NCC* ncc) {
     NCC_updateRule(pushingRuleData.set(&pushingRuleData, "function-definition",
                                        "${function-head} ${} ${compound-statement}"));
 
-    // Test document,
-    NCC_addRule   (pushingRuleData.set(&pushingRuleData, "TestDocument",
-                                       "#{                          "
-                                       "        {primary-expression}"
-                                       "        {postfix-expression}"
-                                       "          {unary-expression}"
-                                       "           {cast-expression}"
-                                       " {multiplicative-expression}"
-                                       "       {additive-expression}"
-                                       "          {shift-expression}"
-                                       "     {relational-expression}"
-                                       "       {equality-expression}"
-                                       "            {and-expression}"
-                                       "            {xor-expression}"
-                                       "             {or-expression}"
-                                       "    {logical-and-expression}"
-                                       "     {logical-or-expression}"
-                                       "    {conditional-expression}"
-                                       "     {assignment-expression}"
-                                       "                {expression}"
-                                       "       {constant-expression}"
-                                       "               {declaration}"
-                                       "          {translation-unit}"
-                                       "}                           "));
-    NCC_setRootRule(ncc, "TestDocument");
+    // Set root rule,
+    NCC_setRootRule(ncc, "translation-unit");
 
     // Cleanup,
     NCC_destroyRuleData(&  plainRuleData);
