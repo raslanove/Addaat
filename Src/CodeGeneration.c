@@ -6,6 +6,11 @@
 // The 8th of August, 2022.
 //
 
+// TODO: add addToken() to NCC. It should be the same as add rule, but adds a rule for a token.
+//       When tokens are present, the input text is tokenized before the rules are applied. If
+//       a substitute node refers to a token, the token name (not value) is matched. When tokenizing,
+//       reuse tokens with the same name a value.
+
 // TODO: add failed rule to matching result...
 // TODO: perform address translation based on a flag...
 // TODO: fix arrays are not primitive types...
@@ -76,6 +81,7 @@ struct CodeGenerationData;
 
 static boolean parseStatement(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData);
 static boolean parseCompoundStatement(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData, struct NVector* predefinedLocalVariables);
+static boolean parseExpression(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData);
 
 static void destroyAndDeleteVariableInfo(struct VariableInfo* variableInfo);
 static void destroyAndDeleteVariableInfos(struct NVector* variableInfosVector);
@@ -847,11 +853,106 @@ static boolean parseClassDeclaration(struct NCC_ASTNode* tree, struct CodeGenera
 // Expression
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-static boolean parseUnaryExpression(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
+static boolean parsePrimaryExpression(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
     // TODO: ...xxx
     Begin
-    NLOGE("Sdf", "Parsing unary-expression: %s", VALUE);
+    NLOGE("Sdf", "Parsing primary-expression: %s", VALUE);
     return True;
+}
+
+static boolean parseCastExpression(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
+    // TODO: ...xxx
+    Begin
+    NLOGE("Sdf", "Parsing cast-expression: %s", VALUE);
+    return True;
+}
+
+static boolean parseArgumentExpressionList(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
+    // TODO: ...xxx
+    Begin
+    NLOGE("Sdf", "Parsing argument-expression-list: %s", VALUE);
+    return True;
+}
+
+static boolean parseIdentifier(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
+    // TODO: ...xxx
+    Begin
+    NLOGE("Sdf", "Parsing identifier: %s", VALUE);
+    return True;
+}
+
+static boolean parsePostFixExpression(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
+
+    // postfix-expression = ${primary-expression} {
+    //                         {${} ${[}  ${} ${expression} ${} ${]} } |
+    //                         {${} ${(}  ${} ${argument-expression-list}|${ε} ${} ${)} } |
+    //                         {${} ${.}  ${} ${identifier}} |
+    //                         {${} ${++} } |
+    //                         {${} ${--} }
+    //                      }^*
+
+    Begin
+
+    if (!parsePrimaryExpression(currentChild, codeGenerationData)) return False;
+    NextChild
+
+    while (currentChild) {
+
+        if (Equals("[")) {
+            Append("[")
+            NextChild
+
+            if (!parseExpression(currentChild, codeGenerationData)) return False;
+            NextChild
+
+            Append("]")
+        } else if (Equals("(")) {
+            Append("(")
+            NextChild
+
+            if (Equals("argument-expression-list")) {
+                if (!parseArgumentExpressionList(currentChild, codeGenerationData)) return False;
+                NextChild
+            }
+
+            Append(")")
+        } else if (Equals(".")) {
+            Append(".")
+            NextChild
+
+            if (!parseIdentifier(currentChild, codeGenerationData)) return False;
+        } else {
+            Append(VALUE)
+        }
+
+        NextChild
+    }
+
+    return True;
+}
+
+static boolean parseUnaryExpression(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
+
+    // unary-expression  = ${postfix-expression} |
+    //                     { ${++}             ${} ${unary-expression} } |
+    //                     { ${--}             ${} ${unary-expression} } |
+    //                     { ${unary-operator} ${}  ${cast-expression} }
+
+    Begin
+    if (Equals("postfix-expression")) return parsePostFixExpression(currentChild, codeGenerationData);
+
+    // Parse operator,
+    Append(VALUE)
+    NextChild
+
+    boolean success = False;
+    if (Equals("unary-expression")) {
+        success = parseUnaryExpression(currentChild, codeGenerationData);
+    } else if (Equals("cast-expression")) {
+        success = parseCastExpression(currentChild, codeGenerationData);
+    }
+
+    return success;
 }
 
 static boolean parseConditionalExpression(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
@@ -867,7 +968,6 @@ static boolean parseAssignmentExpression(struct NCC_ASTNode* tree, struct CodeGe
     //                         {${unary-expression} ${} ${assignment-operator} ${} ${assignment-expression}}
 
     Begin
-    NLOGE("Sdf", "Parsing assignment-expression: %s", VALUE);
 
     // Parse conditional expression,
     if (Equals("conditional-expression")) return parseConditionalExpression(currentChild, codeGenerationData);

@@ -235,8 +235,8 @@ void defineLanguage(struct NCC* ncc) {
                                        "}^*"));
 
     // Argument expression list,
-    NCC_addRule   (plainRuleData.set(&plainRuleData, "assignment-expression", "STUB!"));
-    NCC_updateRule(plainRuleData.set(&plainRuleData, "argument-expression-list",
+    NCC_addRule   (  plainRuleData.set(&  plainRuleData, "assignment-expression", "STUB!"));
+    NCC_updateRule(pushingRuleData.set(&pushingRuleData, "argument-expression-list",
                                      "${assignment-expression} {"
                                      "   ${} ${,} ${} ${assignment-expression}"
                                      "}^*"));
