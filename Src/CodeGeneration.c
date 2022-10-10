@@ -847,9 +847,61 @@ static boolean parseClassDeclaration(struct NCC_ASTNode* tree, struct CodeGenera
 // Expression
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+static boolean parseUnaryExpression(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
+    // TODO: ...xxx
+    Begin
+    NLOGE("Sdf", "Parsing unary-expression: %s", VALUE);
+    return True;
+}
+
+static boolean parseConditionalExpression(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
+    // TODO: ...xxx
+    Begin
+    NLOGE("Sdf", "Parsing conditional-expression: %s", VALUE);
+    return True;
+}
+
+static boolean parseAssignmentExpression(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
+
+    // assignment-expression = ${conditional-expression} |
+    //                         {${unary-expression} ${} ${assignment-operator} ${} ${assignment-expression}}
+
+    Begin
+    NLOGE("Sdf", "Parsing assignment-expression: %s", VALUE);
+
+    // Parse conditional expression,
+    if (Equals("conditional-expression")) return parseConditionalExpression(currentChild, codeGenerationData);
+
+    // Parse assignee
+    if (!parseUnaryExpression(currentChild, codeGenerationData)) return False;
+    NextChild
+
+    // Operator,
+    Append(" ")
+    Append(VALUE)
+    Append(" ")
+    NextChild
+
+    // Parse assignment expression,
+    return parseAssignmentExpression(currentChild, codeGenerationData);
+}
+
 static boolean parseExpression(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
 
-    // TODO: ...xxx
+    // expression = ${assignment-expression} {
+    //                 ${} ${,} ${} ${assignment-expression}
+    //              }^*
+
+    Begin
+
+    if (!parseAssignmentExpression(currentChild, codeGenerationData)) return False;
+    NextChild
+
+    while (currentChild) {
+        NextChild // Skip the comma.
+        if (!parseAssignmentExpression(currentChild, codeGenerationData)) return False;
+        NextChild
+    }
     return True;
 }
 
@@ -943,7 +995,8 @@ static boolean parseExpressionStatement(struct NCC_ASTNode* tree, struct CodeGen
     // expression-statement = ${expression}|${ε} ${} ${;}
 
     Begin
-    boolean success = parseExpression(currentChild, codeGenerationData);
+    boolean success = True;
+    if (!Equals(";")) success = parseExpression(currentChild, codeGenerationData);
     Append(";\n")
     return success;
 }
@@ -1017,10 +1070,13 @@ static boolean parseIterationStatement(struct NCC_ASTNode* tree, struct CodeGene
 
         Append("do ")
         NextChild
+
         if (!parseStatement(currentChild, codeGenerationData)) return False;
+        NextChild
 
         Append("while (")
         NextChild
+
         if (!parseExpression(currentChild, codeGenerationData)) return False;
 
         Append(");\n")
@@ -1036,16 +1092,18 @@ static boolean parseIterationStatement(struct NCC_ASTNode* tree, struct CodeGene
 
         Append("for (")
         NextChild
+
         if (Equals(";")) {
             // Just skip,
-            NextChild
             Append(";")
+            NextChild
         } else if (Equals("expression")) {
             if (!parseExpression(currentChild, codeGenerationData)) goto forFinish;
+            NextChild
 
             // Skip the ;
-            NextChild
             Append(";")
+            NextChild
         } else if (Equals("declaration")) {
             if (!parseLocalVariableDeclaration(currentChild, codeGenerationData)) goto forFinish;
             NextChild
@@ -1060,8 +1118,8 @@ static boolean parseIterationStatement(struct NCC_ASTNode* tree, struct CodeGene
         }
 
         // Skip the ;
-        NextChild
         Append(";")
+        NextChild
 
         // Then parse the increment expression (if any),
         if (Equals("expression")) {
