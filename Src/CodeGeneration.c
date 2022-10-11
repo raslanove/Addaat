@@ -83,6 +83,7 @@ struct CodeGenerationData;
 static boolean parseStatement(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData);
 static boolean parseCompoundStatement(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData, struct NVector* predefinedLocalVariables);
 static boolean parseExpression(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData);
+static boolean parseAssignmentExpression(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData);
 static boolean parseCastExpression(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData);
 
 static void destroyAndDeleteVariableInfo(struct VariableInfo* variableInfo);
@@ -886,9 +887,22 @@ static boolean parsePrimaryExpression(struct NCC_ASTNode* tree, struct CodeGener
 }
 
 static boolean parseArgumentExpressionList(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
-    // TODO: ...xxx
+    // argument-expression-list = ${assignment-expression} {
+    //                               ${} ${,} ${} ${assignment-expression}
+    //                            }^*
+
     Begin
-    NLOGE("Sdf", "Parsing argument-expression-list: %s", VALUE);
+
+    if (!parseAssignmentExpression(currentChild, codeGenerationData)) return False;
+    NextChild
+
+    while (currentChild) {
+        Append(", ")
+        NextChild
+
+        if (!parseAssignmentExpression(currentChild, codeGenerationData)) return False;
+        NextChild
+    }
     return True;
 }
 
