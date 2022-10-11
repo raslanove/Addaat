@@ -966,10 +966,52 @@ static boolean parseUnaryExpression(struct NCC_ASTNode* tree, struct CodeGenerat
     return success;
 }
 
-static boolean parseLogicalOrExpression(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
+static boolean parseOrExpression(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
     // TODO: ...xxx
     Begin
-    NLOGE("Sdf", "Parsing logical-or-expression: %s", VALUE);
+    NLOGE("Sdf", "Parsing or-expression: %s", VALUE);
+    return True;
+}
+
+static boolean parseLogicalAndExpression(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
+
+    // logical-and-expression = ${or-expression} {
+    //                             ${} ${&&} ${} ${or-expression}
+    //                          }^*
+
+    Begin
+
+    if (!parseOrExpression(currentChild, codeGenerationData)) return False;
+    NextChild
+
+    while (currentChild) {
+        Append(" && ")
+        NextChild
+
+        if (!parseOrExpression(currentChild, codeGenerationData)) return False;
+        NextChild
+    }
+    return True;
+}
+
+static boolean parseLogicalOrExpression(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
+
+    // logical-or-expression = ${logical-and-expression} {
+    //                            ${} ${||} ${} ${logical-and-expression}
+    //                         }^*
+
+    Begin
+
+    if (!parseLogicalAndExpression(currentChild, codeGenerationData)) return False;
+    NextChild
+
+    while (currentChild) {
+        Append(" || ")
+        NextChild
+
+        if (!parseLogicalAndExpression(currentChild, codeGenerationData)) return False;
+        NextChild
+    }
     return True;
 }
 
