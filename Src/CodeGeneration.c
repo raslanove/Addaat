@@ -10,6 +10,7 @@
 //       When tokens are present, the input text is tokenized before the rules are applied. If
 //       a substitute node refers to a token, the token name (not value) is matched. When tokenizing,
 //       reuse tokens with the same name a value.
+// TODO: rename token node into selection node and add documentation...
 
 // TODO: add failed rule to matching result...
 // TODO: perform address translation based on a flag...
@@ -853,10 +854,33 @@ static boolean parseClassDeclaration(struct NCC_ASTNode* tree, struct CodeGenera
 // Expression
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-static boolean parsePrimaryExpression(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
-    // TODO: ...xxx
+static boolean parseIdentifier(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
+    // TODO: Substitute the correct identifier (account for "this" and for statics)...
     Begin
-    NLOGE("Sdf", "Parsing primary-expression: %s", VALUE);
+    Append(VALUE)
+    return True;
+}
+
+static boolean parsePrimaryExpression(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
+
+    // primary-expression = ${identifier}     |
+    //                      ${constant}       |
+    //                      ${string-literal} |
+    //                      { ${(} ${} ${expression} ${} ${)} }
+
+    Begin
+
+    if (Equals("identifier")) return parseIdentifier(currentChild, codeGenerationData);
+
+    if (Equals("expression")) {
+        Append("(")
+        if (!parseExpression(currentChild, codeGenerationData)) return False;
+        Append(")")
+        return True;
+    }
+
+    // This is either a string-literal or a constant,
+    Append(VALUE)
     return True;
 }
 
@@ -871,13 +895,6 @@ static boolean parseArgumentExpressionList(struct NCC_ASTNode* tree, struct Code
     // TODO: ...xxx
     Begin
     NLOGE("Sdf", "Parsing argument-expression-list: %s", VALUE);
-    return True;
-}
-
-static boolean parseIdentifier(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
-    // TODO: ...xxx
-    Begin
-    NLOGE("Sdf", "Parsing identifier: %s", VALUE);
     return True;
 }
 
@@ -906,15 +923,9 @@ static boolean parsePostFixExpression(struct NCC_ASTNode* tree, struct CodeGener
             NextChild
 
             Append("]")
-        } else if (Equals("(")) {
+        } else if (Equals("argument-expression-list")) {
             Append("(")
-            NextChild
-
-            if (Equals("argument-expression-list")) {
-                if (!parseArgumentExpressionList(currentChild, codeGenerationData)) return False;
-                NextChild
-            }
-
+            if (!parseArgumentExpressionList(currentChild, codeGenerationData)) return False;
             Append(")")
         } else if (Equals(".")) {
             Append(".")
