@@ -83,6 +83,7 @@ struct CodeGenerationData;
 static boolean parseStatement(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData);
 static boolean parseCompoundStatement(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData, struct NVector* predefinedLocalVariables);
 static boolean parseExpression(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData);
+static boolean parseCastExpression(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData);
 
 static void destroyAndDeleteVariableInfo(struct VariableInfo* variableInfo);
 static void destroyAndDeleteVariableInfos(struct NVector* variableInfosVector);
@@ -884,13 +885,6 @@ static boolean parsePrimaryExpression(struct NCC_ASTNode* tree, struct CodeGener
     return True;
 }
 
-static boolean parseCastExpression(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
-    // TODO: ...xxx
-    Begin
-    NLOGE("Sdf", "Parsing cast-expression: %s", VALUE);
-    return True;
-}
-
 static boolean parseArgumentExpressionList(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
     // TODO: ...xxx
     Begin
@@ -966,15 +960,184 @@ static boolean parseUnaryExpression(struct NCC_ASTNode* tree, struct CodeGenerat
     return success;
 }
 
-static boolean parseOrExpression(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
+static boolean parseCastExpression(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
     // TODO: ...xxx
     Begin
-    NLOGE("Sdf", "Parsing or-expression: %s", VALUE);
+    NLOGE("Sdf", "Parsing cast-expression: %s", VALUE);
+    return True;
+}
+
+static boolean parseMultiplicativeExpression(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
+    // multiplicative-expression = ${cast-expression} {"
+    //                                ${} ${*}|${/}|${%} ${} ${cast-expression}
+    //                             }^*
+
+    Begin
+
+    if (!parseCastExpression(currentChild, codeGenerationData)) return False;
+    NextChild
+
+    while (currentChild) {
+        Append(" ")
+        Append(VALUE)
+        Append(" ")
+        NextChild
+
+        if (!parseCastExpression(currentChild, codeGenerationData)) return False;
+        NextChild
+    }
+    return True;
+}
+
+static boolean parseAdditiveExpression(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
+    // additive-expression = ${multiplicative-expression} {"
+    //                          ${} ${+}|${-} ${} ${multiplicative-expression}
+    //                       }^*
+
+    Begin
+
+    if (!parseMultiplicativeExpression(currentChild, codeGenerationData)) return False;
+    NextChild
+
+    while (currentChild) {
+        Append(" ")
+        Append(VALUE)
+        Append(" ")
+        NextChild
+
+        if (!parseMultiplicativeExpression(currentChild, codeGenerationData)) return False;
+        NextChild
+    }
+    return True;
+}
+
+static boolean parseShiftExpression(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
+    // shift-expression = ${additive-expression} {
+    //                       ${} ${<<}|${>>} ${} ${additive-expression}
+    //                    }^*
+
+    Begin
+
+    if (!parseAdditiveExpression(currentChild, codeGenerationData)) return False;
+    NextChild
+
+    while (currentChild) {
+        Append(" ")
+        Append(VALUE)
+        Append(" ")
+        NextChild
+
+        if (!parseAdditiveExpression(currentChild, codeGenerationData)) return False;
+        NextChild
+    }
+    return True;
+}
+
+static boolean parseRelationalExpression(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
+    // relational-expression = ${shift-expression} {
+    //                            ${} #{{<} {>} {<=} {>=}} ${} ${shift-expression}
+    //                         }^*
+
+    Begin
+
+    if (!parseShiftExpression(currentChild, codeGenerationData)) return False;
+    NextChild
+
+    while (currentChild) {
+        Append(" ")
+        Append(VALUE)
+        Append(" ")
+        NextChild
+
+        if (!parseShiftExpression(currentChild, codeGenerationData)) return False;
+        NextChild
+    }
+    return True;
+}
+
+static boolean parseEqualityExpression(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
+    // equality-expression = ${relational-expression} {
+    //                          ${} ${==}|${!=} ${} ${relational-expression}
+    //                       }^*
+
+    Begin
+
+    if (!parseRelationalExpression(currentChild, codeGenerationData)) return False;
+    NextChild
+
+    while (currentChild) {
+        Append(" ")
+        Append(VALUE)
+        Append(" ")
+        NextChild
+
+        if (!parseRelationalExpression(currentChild, codeGenerationData)) return False;
+        NextChild
+    }
+    return True;
+}
+
+static boolean parseAndExpression(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
+    // and-expression = ${equality-expression} {
+    //                     ${} #{{&} {&&} != {&&}} ${} ${equality-expression}
+    //                  }^*
+
+    Begin
+
+    if (!parseEqualityExpression(currentChild, codeGenerationData)) return False;
+    NextChild
+
+    while (currentChild) {
+        Append(" & ")
+        NextChild
+
+        if (!parseEqualityExpression(currentChild, codeGenerationData)) return False;
+        NextChild
+    }
+    return True;
+}
+
+static boolean parseXorExpression(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
+    // xor-expression = ${and-expression} {
+    //                     ${} ${^} ${} ${and-expression}
+    //                  }^*
+
+    Begin
+
+    if (!parseAndExpression(currentChild, codeGenerationData)) return False;
+    NextChild
+
+    while (currentChild) {
+        Append(" ^ ")
+        NextChild
+
+        if (!parseAndExpression(currentChild, codeGenerationData)) return False;
+        NextChild
+    }
+    return True;
+}
+
+static boolean parseOrExpression(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
+    // or-expression = ${xor-expression} {
+    //                    ${} #{{|} {||} != {||}} ${} ${xor-expression}
+    //                 }^*
+
+    Begin
+
+    if (!parseXorExpression(currentChild, codeGenerationData)) return False;
+    NextChild
+
+    while (currentChild) {
+        Append(" | ")
+        NextChild
+
+        if (!parseXorExpression(currentChild, codeGenerationData)) return False;
+        NextChild
+    }
     return True;
 }
 
 static boolean parseLogicalAndExpression(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
-
     // logical-and-expression = ${or-expression} {
     //                             ${} ${&&} ${} ${or-expression}
     //                          }^*
@@ -995,7 +1158,6 @@ static boolean parseLogicalAndExpression(struct NCC_ASTNode* tree, struct CodeGe
 }
 
 static boolean parseLogicalOrExpression(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
-
     // logical-or-expression = ${logical-and-expression} {
     //                            ${} ${||} ${} ${logical-and-expression}
     //                         }^*
@@ -1016,7 +1178,6 @@ static boolean parseLogicalOrExpression(struct NCC_ASTNode* tree, struct CodeGen
 }
 
 static boolean parseConditionalExpression(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
-
     // conditional-expression = ${logical-or-expression} |
     //                          {${logical-or-expression} ${} ${?} ${} ${expression} ${} ${:} ${} ${conditional-expression}}
 
@@ -1035,7 +1196,6 @@ static boolean parseConditionalExpression(struct NCC_ASTNode* tree, struct CodeG
 }
 
 static boolean parseAssignmentExpression(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
-
     // assignment-expression = ${conditional-expression} |
     //                         {${unary-expression} ${} ${assignment-operator} ${} ${assignment-expression}}
 
@@ -1059,7 +1219,6 @@ static boolean parseAssignmentExpression(struct NCC_ASTNode* tree, struct CodeGe
 }
 
 static boolean parseExpression(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
-
     // expression = ${assignment-expression} {
     //                 ${} ${,} ${} ${assignment-expression}
     //              }^*

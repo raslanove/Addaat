@@ -139,7 +139,7 @@ void NMain() {
                "    do;while(1);\n"
                "    for (int i; i<100; i++);\n"
                "    int i;\n"
-               "    for (i=12; i<100; i++);\n"
+               "    for (i=12+15; i<100; i++);\n"
                "    finish: return;\n"
                "}");
 
