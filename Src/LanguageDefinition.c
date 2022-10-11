@@ -223,7 +223,6 @@ void defineLanguage(struct NCC* ncc) {
                                        "{ ${(} ${} ${expression} ${} ${)} }"));
 
     // Postfix expression,
-    NCC_addRule   (  plainRuleData.set(&plainRuleData, "type-name", "STUB!"));
     NCC_addRule   (  plainRuleData.set(&  plainRuleData, "argument-expression-list", "STUB!"));
     NCC_addRule   (pushingRuleData.set(&pushingRuleData, "postfix-expression",
                                        "${primary-expression} {"
@@ -257,7 +256,7 @@ void defineLanguage(struct NCC* ncc) {
     // Cast expression,
     NCC_updateRule(pushingRuleData.set(&pushingRuleData, "cast-expression",
                                        "${unary-expression} | "
-                                       "{ ${(} ${} ${type-name} ${} ${)} ${} ${cast-expression} }"));
+                                       "{ ${(} ${} ${identifier} ${} ${)} ${} ${cast-expression} }"));
 
     // Multiplicative expression,
     NCC_addRule   (pushingRuleData.set(&pushingRuleData, "multiplicative-expression",

@@ -961,14 +961,24 @@ static boolean parseUnaryExpression(struct NCC_ASTNode* tree, struct CodeGenerat
 }
 
 static boolean parseCastExpression(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
-    // TODO: ...xxx
+    // cast-expression = ${unary-expression} |
+    //                   { ${(} ${} ${identifier} ${} ${)} ${} ${cast-expression} }
+
     Begin
-    NLOGE("Sdf", "Parsing cast-expression: %s", VALUE);
-    return True;
+
+    if (Equals("unary-expression")) return parseUnaryExpression(currentChild, codeGenerationData);
+
+    // TODO: make sure the identifier is a valid type name (take care of classes)...
+    Append("(")
+    Append(VALUE)
+    NextChild
+    Append(")")
+
+    return parseCastExpression(currentChild, codeGenerationData);
 }
 
 static boolean parseMultiplicativeExpression(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
-    // multiplicative-expression = ${cast-expression} {"
+    // multiplicative-expression = ${cast-expression} {
     //                                ${} ${*}|${/}|${%} ${} ${cast-expression}
     //                             }^*
 
@@ -990,7 +1000,7 @@ static boolean parseMultiplicativeExpression(struct NCC_ASTNode* tree, struct Co
 }
 
 static boolean parseAdditiveExpression(struct NCC_ASTNode* tree, struct CodeGenerationData* codeGenerationData) {
-    // additive-expression = ${multiplicative-expression} {"
+    // additive-expression = ${multiplicative-expression} {
     //                          ${} ${+}|${-} ${} ${multiplicative-expression}
     //                       }^*
 
