@@ -25,7 +25,7 @@
 #include <NCString.h>
 #include <NError.h>
 
-#define COLORIZE_CODE 1
+#define COLORIZE_CODE 0
 
 #define TAB "    "
 
