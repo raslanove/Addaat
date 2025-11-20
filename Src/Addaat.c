@@ -14,7 +14,7 @@
 #include <NCString.h>
 #include <NError.h>
 
-#define PRINT_TREES 0
+#define PRINT_TREES 1
 #define PRINT_COLORED_TREES 1
 
 #define PERFORM_ERROR_CHECKING_TESTS 0

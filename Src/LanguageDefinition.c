@@ -11,7 +11,7 @@
 #include <NCC.h>
 #include <NSystemUtils.h>
 
-// TODO: (performance improvement) reduce pushing rules as much as possible (like paranthesis, commas and such, they are not useful). \
+// TODO: (performance improvement) reduce pushing rules as much as possible (like parenthesis, commas and such, they are not useful). \
          Remember to update code-generation to reflect changes...
 
 static boolean printListener(struct NCC_MatchingData* matchingData) {
@@ -135,15 +135,18 @@ void defineLanguage(struct NCC* ncc) {
     NCC_addRule(pushingRuleData.set(&pushingRuleData,       "unsigned",       "unsigned"));
     NCC_addRule(pushingRuleData.set(&pushingRuleData,         "static",         "static"));
 
+    // Keywords,
+    NCC_addRule(pushingRuleData.set(&pushingRuleData, "keyword", "#{{class} {enum} {if} {else} {while} {do} {for} {continue} {break} {return} {switch} {case} {default} {goto} {void} {char} {short} {int} {long} {float} {double} {signed} {unsigned} {static}}"));
+
     // Spaces and comments,
     NCC_addRule(  plainRuleData.set(&  plainRuleData, "ε", ""));
     NCC_addRule(pushingRuleData.set(&  plainRuleData, "line-cont", "\\\\\n"));
-    NCC_addRule(  plainRuleData.set(&  plainRuleData, "white-space", "{\\ |\t|\r|\n|${line-cont}} {\\ |\t|\r|\n|${line-cont}}^*"));
+    NCC_addRule(  plainRuleData.set(&  plainRuleData, "white-space", "{\\ |\\\t|\r|\n|${line-cont}} {\\ |\\\t|\r|\n|${line-cont}}^*"));
     NCC_addRule(pushingRuleData.set(&  plainRuleData, "line-comment", "${white-space} // {{* \\\\\n}^*} * \n|${ε}"));
     NCC_addRule(pushingRuleData.set(&  plainRuleData, "block-comment", "${white-space} /\\* * \\*/"));
     NCC_addRule(  plainRuleData.set(&  plainRuleData, "ignorable", "#{{white-space} {line-comment} {block-comment}}"));
     NCC_addRule(  plainRuleData.set(&  plainRuleData,  "",              "${ignorable}^*"));
-    NCC_addRule(  plainRuleData.set(&  plainRuleData, " ", "${ignorable} ${ignorable}^*"));
+    NCC_addRule(  plainRuleData.set(&  plainRuleData, " ", "${ignorable} ${ignorable}^*")); // If we need to force matching at least 1 ignorable.
 
     // TODO: use the non-ignorable white-spaces where they should be (like, between "int" and "a" in "int a;").
 
@@ -156,9 +159,9 @@ void defineLanguage(struct NCC* ncc) {
     NCC_addRule(  plainRuleData.set(&  plainRuleData, "universal-character-name", "{\\\\u ${hex-quad}} | {\\\\U ${hex-quad} ${hex-quad}}"));
 
     // Identifier,
-    NCC_addRule(  plainRuleData.set(&  plainRuleData, "identifier-non-digit", "${non-digit} | ${universal-character-name}"));
+    NCC_addRule(  plainRuleData.set(&  plainRuleData, "identifier-non-digit", "${non-digit} | ${universal-character-name}")); // TODO: This doesn't look right! This won't identify true unicode characters.
     NCC_addRule(pushingRuleData.set(&pushingRuleData, "identifier-content", "${identifier-non-digit} {${digit} | ${identifier-non-digit}}^*"));
-    NCC_addRule(pushingRuleData.set(&pushingRuleData, "identifier", "#{{class} {enum} {if} {else} {while} {do} {for} {continue} {break} {return} {switch} {case} {default} {goto} {void} {char} {short} {int} {long} {float} {double} {signed} {unsigned} {static} {identifier-content} == {identifier-content}}"));
+    NCC_addRule(pushingRuleData.set(&pushingRuleData, "identifier", "#{{keyword} {identifier-content} == {identifier-content}}"));
 
     // Constants,
     // Integer constant,
@@ -215,6 +218,8 @@ void defineLanguage(struct NCC* ncc) {
     // -------------------------------------
 
     // Primary expression,
+    // You can think of primary expression as the smallest unit that could be considered an expression
+    // on its own. Other more complex expressions are built on top of the primary expression,
     NCC_addRule   (  plainRuleData.set(&  plainRuleData, "expression", "STUB!"));
     NCC_addRule   (pushingRuleData.set(&pushingRuleData, "primary-expression",
                                        "${identifier} | "
@@ -379,7 +384,7 @@ void defineLanguage(struct NCC* ncc) {
                                        "  {float}    {double}          "
                                        "  {class-specifier}            "
                                        "  {enum-specifier}             "
-                                       "  {identifier} != {identifier}}"
+                                       "  {identifier} != {identifier}}"    // To prevent identifiers that start with a type name from being mistakenly matched as type-specifier. For example, the identifier "structure" would match "struct", but not when we match and reject identifiers.
                                        "{${} ${array-specifier}}^*"));
 
     // Array specifier,

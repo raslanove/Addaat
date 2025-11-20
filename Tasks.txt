@@ -1,0 +1,7 @@
+- Revist how stacks were used while matching.
+
+- Implement error reporting, by keeping track of the longest match (?). Rules should optionally push rule name to an "Expected" stack based on a flag set while creating the rule. If matching fails, the failing rule (or the first parent that has the flag set) should push what it expects to a stack, then a generic "Expected ... or ... or ..." can be generated. The "expected" stack should be emptied before pushing if this rule managed to go further than the current longest match "depth" (as in parents count). This way, the stack can have multiple rules on the same level push what they expect. If a deeper rule pushes what it expects and that interfers with the error reporting of a higher rule, then a cloned of that rule withuot the flag set should be used instead? Or maybe if add a certain symbol to the rule name (like ~) then it matches that same rule but neglectes the flag?
+- Track line number for error reporting?
+
+- Implement polymorphism (in function names).
+

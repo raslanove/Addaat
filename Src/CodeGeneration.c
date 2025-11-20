@@ -1,6 +1,6 @@
 
 //
-// Converting Addaat code to C code, enforcing language symantics in the process.
+// Converting Addaat code to C code, enforcing language semantics in the process.
 //
 // By Omar El Sayyed.
 // The 8th of August, 2022.
@@ -10,13 +10,17 @@
 //       When tokens are present, the input text is tokenized before the rules are applied. If
 //       a substitute node refers to a token, the token name (not value) is matched. When tokenizing,
 //       reuse tokens with the same name a value.
-// TODO: rename token node into selection node and add documentation...
+// TODO: rename token node into selection node...
 
 // TODO: add failed rule to matching result...
 // TODO: perform address translation based on a flag...
 // TODO: fix arrays are not primitive types...
-// TODO: remove the need to write "class" before declaring a class...
-// TODO: replace function pointers with interfaces...
+// TODO: remove the need to write "class" before declaring a class variable...
+// TODO: Make functions a first class citizen...
+// TODO: Add managed/new/delete/weak keywords to be used for allocations, where:
+//          => new and delete allocate normally, no automatic collection.
+//          => managed is garbage collected. It's a replacement for new/delete.
+//          => weak is a qualifier (like const). A weak reference doesn't influence collection, it's used to test if an object is still alive.
 
 #include <CodeGeneration.h>
 
@@ -217,7 +221,7 @@ static void codeAppend(struct CodeGenerationData* codeGenerationData, const char
     { \
         currentChildIndex++; \
         struct NCC_ASTNode** node = NVector.get(&tree->childNodes, currentChildIndex); \
-        currentChild = node ? *node : 0; \
+        currentChild = node ? *node : 0; /* This assumes that NVECTOR_BOUNDARY_CHECK is set */ \
     }
 
 #define NAME  NString.get(&currentChild->name )
