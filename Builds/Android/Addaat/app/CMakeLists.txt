@@ -12,13 +12,17 @@ project(Addaat)
 
 add_definitions(-DNMAIN=1)
 
-FILE(GLOB             SrcCFiles src/main/cpp/Addaat/*.c)
-FILE(GLOB             NCCCFiles src/main/cpp/NOMoneCC/Src/*.c)
-FILE(GLOB    StdLibCommonCFiles src/main/cpp/NOMoneCC/Src/NOMoneStdLib/*.c)
-FILE(GLOB StdLibAndroidCPPFiles src/main/cpp/NOMoneCC/Src/NOMoneStdLib/Backends/Android/Cpp/*.cpp)
+FILE(GLOB                      SrcCFiles src/main/cpp/Addaat/*.c)
+FILE(GLOB                  HelloCCCFiles src/main/cpp/NOMoneCC/Samples/HelloCC/Src/*.c)
+FILE(GLOB CCodePrettifierColorizerCFiles src/main/cpp/NOMoneCC/Samples/CCodePrettifierColorizer/Src/*.c)
+FILE(GLOB                      NCCCFiles src/main/cpp/NOMoneCC/Src/*.c)
+FILE(GLOB             StdLibCommonCFiles src/main/cpp/NOMoneCC/Src/NOMoneStdLib/*.c)
+FILE(GLOB          StdLibAndroidCPPFiles src/main/cpp/NOMoneCC/Src/NOMoneStdLib/Backends/Android/Cpp/*.cpp)
 
 set(SRC
         ${SrcCFiles}
+        #${HelloCCCFiles}
+        #${CCodePrettifierColorizerCFiles}
         ${NCCCFiles}
         ${StdLibCommonCFiles}
         ${StdLibAndroidCPPFiles})

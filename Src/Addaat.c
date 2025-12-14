@@ -35,9 +35,10 @@ static void test(struct NCC* ncc, const char* code) {
 static boolean generate(struct NCC* ncc, const char* code, struct NString* outCode) {
 
     boolean success = False;
-    struct NCC_MatchingResult matchingResult;
-    struct NCC_ASTNode_Data tree;
-    boolean matched = NCC_match(ncc, code, &matchingResult, &tree);
+    NCC_MatchingResult matchingResult;
+    NCC_ASTNode_Data tree;
+    NCC_Rule *rootRule = getRootRule(ncc);
+    boolean matched = NCC_match(ncc, rootRule, code, &matchingResult, &tree);
     if (matched && tree.node) {
 
         // Print tree,
